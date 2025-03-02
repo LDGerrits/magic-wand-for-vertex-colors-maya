@@ -3,15 +3,15 @@ requires = ["setuptools", "setuptools-scm"]
 
 
 [tool.setuptools]
-py_modules = ["select_similar_faces"]
+py_modules = ["vertex_color_magic_wand"]
 
 
 [project]
-name = "select_similar_faces"
+name = "vertex_color_magic_wand"
 authors = [
     {name = "LDGerrits"},
 ]
-description = "a color face selector plugin for maya"
+description = "a magic wand for vertex colors plugin for maya"
 readme = "README.md"
 requires-python = ">=3.4"
 keywords = ["maya", "plugin"]

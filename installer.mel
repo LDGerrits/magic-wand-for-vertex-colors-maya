@@ -1,4 +1,4 @@
-string $PLUGIN_NAME = "color_face_selector.py";
+string $PLUGIN_NAME = "vertex_color_magic_wand.py";
 
 // Execute a Python command to get the path to the Maya Python interpreter
 string $mayaPythonPath = `python("import sys; f'\"{sys.executable}\"'")`;

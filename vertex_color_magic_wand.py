@@ -4,10 +4,10 @@ import maya.cmds as cmds
 import maya.mel as mel
 
 # Plugin information
-PLUGIN_NAME = "SelectSimilarColoredFaces"
+PLUGIN_NAME = "Magic Wand for Vertex Colors"
 MENU_NAME = "ToolsMenu"
 MENU_LABEL = "Tools"
-MENU_ENTRY_LABEL = "Magic Tool for Vertex Colors"
+MENU_ENTRY_LABEL = "Magic Wand for Vertex Colors"
 MENU_PARENT = "MayaWindow"
 DEFAULT_THRESHOLD = 1
 
@@ -82,7 +82,7 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 	try:
 		selection = cmds.ls(selection=True)
 		if not selection:
-			display_message("Please, select a face.", "warning")
+			display_message("Please, select a face.", "info")
 			return
 
 		mesh = selection[0].split('.')[0]
