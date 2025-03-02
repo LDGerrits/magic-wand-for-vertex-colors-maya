@@ -7,174 +7,190 @@ import maya.mel as mel
 PLUGIN_NAME = "SelectSimilarColoredFaces"
 MENU_NAME = "ToolsMenu"
 MENU_LABEL = "Tools"
-MENU_ENTRY_LABEL = "Select Similar Colored Faces"
+MENU_ENTRY_LABEL = "Magic Tool for Vertex Colors"
 MENU_PARENT = "MayaWindow"
 DEFAULT_THRESHOLD = 1
 
 __menu_entry_name = ""  # Store generated menu item, used when unregistering
 _last_message = None  # Store the last displayed message
+_threshold_slider = None  # Store reference to the threshold slider
+_last_threshold_value = DEFAULT_THRESHOLD  # Store last used threshold value
 
 
 def maya_useNewAPI():
-    pass
+	pass
 
 
 def display_message(message, level="info"):
-    """Displays messages only if they are different from the last one."""
-    global _last_message
-    if message != _last_message:
-        _last_message = message
-        if level == "info":
-            om.MGlobal.displayInfo(message)
-        elif level == "warning":
-            om.MGlobal.displayWarning(message)
-        elif level == "error":
-            om.MGlobal.displayError(message)
+	"""Displays messages only if they are different from the last one."""
+	global _last_message
+	if message != _last_message:
+		_last_message = message
+		if level == "info":
+			om.MGlobal.displayInfo(message)
+		elif level == "warning":
+			om.MGlobal.displayWarning(message)
+		elif level == "error":
+			om.MGlobal.displayError(message)
+
+
+def selection_changed_callback(*args):
+	"""Callback function that runs whenever the selection changes."""
+	global _threshold_slider, _last_threshold_value
+	if _threshold_slider and cmds.floatSliderGrp(_threshold_slider, exists=True):
+		threshold_value = cmds.floatSliderGrp(_threshold_slider, query=True, value=True)
+		_last_threshold_value = threshold_value # Store last used value
+		cmds.selectSimilarColoredFaces(threshold_value)
+	else:
+		cmds.selectSimilarColoredFaces(_last_threshold_value)
 
 
 class SelectSimilarColoredFacesCmd(om.MPxCommand):
-    command_name = "selectSimilarColoredFaces"
+	command_name = "selectSimilarColoredFaces"
 
-    def __init__(self):
-        om.MPxCommand.__init__(self)
-        
-    @staticmethod
-    def cmdCreator():
-        return SelectSimilarColoredFacesCmd()
+	def __init__(self):
+		om.MPxCommand.__init__(self)
+		
+	@staticmethod
+	def cmdCreator():
+		return SelectSimilarColoredFacesCmd()
 
-    def doIt(self, args):
-        select_similar_colored_faces()
+	def doIt(self, args):
+		select_similar_colored_faces()
 
 
 def register_command(plugin):
-    pluginFn = om.MFnPlugin(plugin)
-    try:
-        pluginFn.registerCommand(SelectSimilarColoredFacesCmd.command_name, SelectSimilarColoredFacesCmd.cmdCreator)
-    except Exception as e:
-        sys.stderr.write(f"Failed to register command: {SelectSimilarColoredFacesCmd.command_name}\n")
-        raise e
+	pluginFn = om.MFnPlugin(plugin)
+	try:
+		pluginFn.registerCommand(SelectSimilarColoredFacesCmd.command_name, SelectSimilarColoredFacesCmd.cmdCreator)
+	except Exception as e:
+		sys.stderr.write(f"Failed to register command: {SelectSimilarColoredFacesCmd.command_name}\n")
+		raise e
 
 
 def unregister_command(plugin):
-    pluginFn = om.MFnPlugin(plugin)
-    try:
-        pluginFn.deregisterCommand(SelectSimilarColoredFacesCmd.command_name)
-    except Exception as e:
-        sys.stderr.write(f"Failed to unregister command: {SelectSimilarColoredFacesCmd.command_name}\n")
-        raise e
+	pluginFn = om.MFnPlugin(plugin)
+	try:
+		pluginFn.deregisterCommand(SelectSimilarColoredFacesCmd.command_name)
+	except Exception as e:
+		sys.stderr.write(f"Failed to unregister command: {SelectSimilarColoredFacesCmd.command_name}\n")
+		raise e
 
 
 def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
-    """Selects faces on a mesh that have similar vertex colors to the currently selected face."""
-    try:
-        selection = cmds.ls(selection=True)
-        if not selection:
-            display_message("Please, select a face.", "warning")
-            return
+	"""Selects faces on a mesh that have similar vertex colors to the currently selected face."""
+	try:
+		selection = cmds.ls(selection=True)
+		if not selection:
+			display_message("Please, select a face.", "warning")
+			return
 
-        mesh = selection[0].split('.')[0]
-        colors = None
+		mesh = selection[0].split('.')[0]
+		colors = None
 
-        try:
-            # Get the RGB color of the selected face's vertex
-            colors = cmds.polyColorPerVertex(selection[0], query=True, colorRGB=True)
-            if not colors or len(colors) == 0:
-                raise ValueError("No vertex colors found on the selected face.")
-        except Exception:
-            display_message("No vertex colors found on the selected face.", "warning")
-            return
+		try:
+			# Get the RGB color of the selected face's vertex
+			colors = cmds.polyColorPerVertex(selection[0], query=True, colorRGB=True)
+			if not colors or len(colors) == 0:
+				raise ValueError("No vertex colors found on the selected face.")
+		except Exception:
+			display_message("No vertex colors found on the selected face.", "warning")
+			return
 
-        # Compute the average color for the selected face
-        r_average = sum(colors[0::3]) / len(colors[0::3])
-        g_average = sum(colors[1::3]) / len(colors[1::3])
-        b_average = sum(colors[2::3]) / len(colors[2::3])
-        target_color = (r_average, g_average, b_average)
-        
-        # Convert percentage to actual threshold
-        threshold = threshold / 100.0
+		# Compute the average color for the selected face
+		r_average = sum(colors[0::3]) / len(colors[0::3])
+		g_average = sum(colors[1::3]) / len(colors[1::3])
+		b_average = sum(colors[2::3]) / len(colors[2::3])
+		target_color = (r_average, g_average, b_average)
+		
+		# Convert percentage to actual threshold
+		threshold = threshold / 100.0
 
-        # Get all faces in the mesh
-        all_faces = cmds.ls(mesh + '.f[*]', flatten=True)
+		# Get all faces in the mesh
+		all_faces = cmds.ls(mesh + '.f[*]', flatten=True)
 
-        matching_faces = []
-        for face in all_faces:
-            face_colors = cmds.polyColorPerVertex(face, query=True, colorRGB=True)
-            if face_colors:
-                r_avg = sum(face_colors[0::3]) / len(face_colors[0::3])
-                g_avg = sum(face_colors[1::3]) / len(face_colors[1::3])
-                b_avg = sum(face_colors[2::3]) / len(face_colors[2::3])
+		matching_faces = []
+		for face in all_faces:
+			face_colors = cmds.polyColorPerVertex(face, query=True, colorRGB=True)
+			if face_colors:
+				r_avg = sum(face_colors[0::3]) / len(face_colors[0::3])
+				g_avg = sum(face_colors[1::3]) / len(face_colors[1::3])
+				b_avg = sum(face_colors[2::3]) / len(face_colors[2::3])
 
-                if (abs(r_avg - target_color[0]) < threshold and
-                    abs(g_avg - target_color[1]) < threshold and
-                    abs(b_avg - target_color[2]) < threshold):
-                    matching_faces.append(face)
+				if (abs(r_avg - target_color[0]) < threshold and
+					abs(g_avg - target_color[1]) < threshold and
+					abs(b_avg - target_color[2]) < threshold):
+					matching_faces.append(face)
 
-        # Select matching faces
-        if matching_faces:
-            cmds.select(matching_faces, replace=True)
-        else:
-            display_message("No matching faces found.", "info")
-            
-    except Exception as e:
-        display_message(f"Error while processing: {e}", "error")
+		# Select matching faces
+		if matching_faces:
+			cmds.select(matching_faces, replace=True)
+		else:
+			display_message("No matching faces found.", "info")
+			
+	except Exception as e:
+		display_message(f"Error while processing: {e}", "error")
 
 
 def show(*args):
-    """Runs the command when clicked in the Maya menu."""
-    open_gui()
-    cmds.selectSimilarColoredFaces()
+	"""Runs the command when clicked in the Maya menu."""
+	open_gui()
+	cmds.selectSimilarColoredFaces(_last_threshold_value)
 
 
 def open_gui():
-    """Creates the GUI for selecting similar faces with a threshold slider."""
-    if cmds.window("SelectSimilarFacesWindow", exists=True):
-        cmds.deleteUI("SelectSimilarFacesWindow")
-    
-    window = cmds.window("SelectSimilarFacesWindow", title="Select Similar Faces", widthHeight=(300, 100), resizeToFitChildren=True)
-    cmds.columnLayout(adjustableColumn=True)
-    
-    threshold_slider = cmds.floatSliderGrp(
-        label="Color Tolerance (%)", field=True, minValue=0, maxValue=100, fieldMinValue=0, fieldMaxValue=100, value=DEFAULT_THRESHOLD,
-        dragCommand=lambda x: select_similar_colored_faces(cmds.floatSliderGrp(threshold_slider, query=True, value=True)))
-    
-    cmds.showWindow(window)
-    cmds.scriptJob(event=["SelectionChanged", lambda: select_similar_colored_faces(cmds.floatSliderGrp(threshold_slider, query=True, value=True))], parent=window)
+	"""Creates the GUI for selecting similar faces with a threshold slider."""
+	global _threshold_slider
+	global _last_threshold_value
+	
+	if cmds.window("SelectSimilarFacesWindow", exists=True):
+		cmds.deleteUI("SelectSimilarFacesWindow")
+	
+	window = cmds.window("SelectSimilarFacesWindow", title="Select Similar Faces", widthHeight=(300, 100), resizeToFitChildren=True)
+	cmds.columnLayout(adjustableColumn=True)
+	
+	_threshold_slider = cmds.floatSliderGrp(
+		label="Color Tolerance (%)", field=True, minValue=0, maxValue=100, fieldMinValue=0, fieldMaxValue=100, value=_last_threshold_value,
+		dragCommand=lambda x: selection_changed_callback())
+	
+	cmds.showWindow(window)
+	cmds.scriptJob(event=["SelectionChanged", selection_changed_callback], parent=window)
 
 
 def loadMenu():
-    """Setup the Maya menu, runs on plugin enable"""
-    global __menu_entry_name
+	"""Setup the Maya menu, runs on plugin enable"""
+	global __menu_entry_name
 
-    # Ensure the menu parent exists
-    mel.eval("evalDeferred buildFileMenu")
+	# Ensure the menu parent exists
+	mel.eval("evalDeferred buildFileMenu")
 
-    if not cmds.menu(f"{MENU_PARENT}|{MENU_NAME}", exists=True):
-        cmds.menu(MENU_NAME, label=MENU_LABEL, parent=MENU_PARENT)
-    
-    __menu_entry_name = cmds.menuItem(label=MENU_ENTRY_LABEL, command=show, parent=MENU_NAME)
+	if not cmds.menu(f"{MENU_PARENT}|{MENU_NAME}", exists=True):
+		cmds.menu(MENU_NAME, label=MENU_LABEL, parent=MENU_PARENT)
+	
+	__menu_entry_name = cmds.menuItem(label=MENU_ENTRY_LABEL, command=show, parent=MENU_NAME)
 
 
 def unloadMenuItem():
-    """Remove the created Maya menu entry, runs on plugin disable"""
-    if cmds.menu(f"{MENU_PARENT}|{MENU_NAME}", exists=True):
-        menu_long_name = f"{MENU_PARENT}|{MENU_NAME}"
-        
-        if cmds.menuItem(__menu_entry_name, exists=True):
-            cmds.deleteUI(__menu_entry_name, menuItem=True)
-        
-        if not cmds.menu(menu_long_name, query=True, itemArray=True):
-            cmds.deleteUI(menu_long_name, menu=True)
+	"""Remove the created Maya menu entry, runs on plugin disable"""
+	if cmds.menu(f"{MENU_PARENT}|{MENU_NAME}", exists=True):
+		menu_long_name = f"{MENU_PARENT}|{MENU_NAME}"
+		
+		if cmds.menuItem(__menu_entry_name, exists=True):
+			cmds.deleteUI(__menu_entry_name, menuItem=True)
+		
+		if not cmds.menu(menu_long_name, query=True, itemArray=True):
+			cmds.deleteUI(menu_long_name, menu=True)
 
 
 def initializePlugin(plugin):
-    """Code to run when the Maya plugin is enabled."""
-    register_command(plugin)
-    loadMenu()
-    om.MGlobal.displayInfo(f"{PLUGIN_NAME} plugin loaded.")
+	"""Code to run when the Maya plugin is enabled."""
+	register_command(plugin)
+	loadMenu()
+	om.MGlobal.displayInfo(f"{PLUGIN_NAME} plugin loaded.")
 
 
 def uninitializePlugin(plugin):
-    """Code to run when the Maya plugin is disabled."""
-    unregister_command(plugin)
-    unloadMenuItem()
-    om.MGlobal.displayInfo(f"{PLUGIN_NAME} plugin unloaded.")
+	"""Code to run when the Maya plugin is disabled."""
+	unregister_command(plugin)
+	unloadMenuItem()
+	om.MGlobal.displayInfo(f"{PLUGIN_NAME} plugin unloaded.")
