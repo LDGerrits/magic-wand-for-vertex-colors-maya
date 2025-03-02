@@ -55,49 +55,53 @@ def unregister_command(plugin):
 
 def select_similar_colored_faces():
     """Selects faces on a mesh that have similar vertex colors to the currently selected face."""
-    selection = cmds.ls(selection=True)
-    if not selection:
-        om.MGlobal.displayWarning("Please, select a face.")
-        return
+    try:
+        selection = cmds.ls(selection=True)
+        if not selection:
+            om.MGlobal.displayWarning("Please, select a face.")
+            return
 
-    mesh = selection[0].split('.')[0]
+        mesh = selection[0].split('.')[0]
 
-    # Get the RGB color of the selected face's vertex
-    colors = cmds.polyColorPerVertex(selection[0], query=True, colorRGB=True)
-    if not colors or len(colors) == 0:
-        om.MGlobal.displayWarning("No vertex colors found on the selected face.")
-        return
+        # Get the RGB color of the selected face's vertex
+        colors = cmds.polyColorPerVertex(selection[0], query=True, colorRGB=True)
+        if not colors or len(colors) == 0:
+            om.MGlobal.displayWarning("No vertex colors found on the selected face.")
+            return
 
-    # Compute the average color for the selected face
-    r_average = sum(colors[0::3]) / len(colors[0::3])
-    g_average = sum(colors[1::3]) / len(colors[1::3])
-    b_average = sum(colors[2::3]) / len(colors[2::3])
-    target_color = (r_average, g_average, b_average)
+        # Compute the average color for the selected face
+        r_average = sum(colors[0::3]) / len(colors[0::3])
+        g_average = sum(colors[1::3]) / len(colors[1::3])
+        b_average = sum(colors[2::3]) / len(colors[2::3])
+        target_color = (r_average, g_average, b_average)
 
-    # Threshold for color matching
-    threshold = 0.01
+        # Threshold for color matching
+        threshold = 0.01
 
-    # Get all faces in the mesh
-    all_faces = cmds.ls(mesh + '.f[*]', flatten=True)
+        # Get all faces in the mesh
+        all_faces = cmds.ls(mesh + '.f[*]', flatten=True)
 
-    matching_faces = []
-    for face in all_faces:
-        face_colors = cmds.polyColorPerVertex(face, query=True, colorRGB=True)
-        if face_colors:
-            r_avg = sum(face_colors[0::3]) / len(face_colors[0::3])
-            g_avg = sum(face_colors[1::3]) / len(face_colors[1::3])
-            b_avg = sum(face_colors[2::3]) / len(face_colors[2::3])
+        matching_faces = []
+        for face in all_faces:
+            face_colors = cmds.polyColorPerVertex(face, query=True, colorRGB=True)
+            if face_colors:
+                r_avg = sum(face_colors[0::3]) / len(face_colors[0::3])
+                g_avg = sum(face_colors[1::3]) / len(face_colors[1::3])
+                b_avg = sum(face_colors[2::3]) / len(face_colors[2::3])
 
-            if (abs(r_avg - target_color[0]) < threshold and
-                abs(g_avg - target_color[1]) < threshold and
-                abs(b_avg - target_color[2]) < threshold):
-                matching_faces.append(face)
+                if (abs(r_avg - target_color[0]) < threshold and
+                    abs(g_avg - target_color[1]) < threshold and
+                    abs(b_avg - target_color[2]) < threshold):
+                    matching_faces.append(face)
 
-    # Select matching faces
-    if matching_faces:
-        cmds.select(matching_faces, replace=True)
-    else:
-        om.MGlobal.displayInfo("No matching faces found.")
+        # Select matching faces
+        if matching_faces:
+            cmds.select(matching_faces, replace=True)
+        else:
+            om.MGlobal.displayInfo("No matching faces found.")
+            
+    except Exception as e:
+        om.MGlobal.displayError(f"Error while processing: {e}")
 
 
 def show(*args):
