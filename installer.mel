@@ -1,5 +1,5 @@
 // TODO change this to your plugin name
-string $MY_PLUGIN_NAME = "my_plugin.py";
+string $color_face_selector = "color_face_selector.py";
 
 // Execute a Python command to get the path to the Maya Python interpreter
 string $mayaPythonPath = `python("import sys; f'\"{sys.executable}\"'")`;
@@ -44,7 +44,7 @@ system($pipInstallCommand);  // Execute the pip install command
 
 
 // Define the plugin file path relative to the MEL script's location
-string $pluginSourceFilePath = $melScriptDir + "/" + $MY_PLUGIN_NAME;
+string $pluginSourceFilePath = $melScriptDir + "/" + $color_face_selector;
 print("Plugin source path: " + $pluginSourceFilePath + "\n");
 
 // Get the Maya plug-ins folder
@@ -64,7 +64,7 @@ if (!`filetest -d $pluginFolderPath`) {
 }
 
 // Define the destination plugin file path
-string $pluginDestinationFilePath = $pluginFolderPath + $MY_PLUGIN_NAME;
+string $pluginDestinationFilePath = $pluginFolderPath + $color_face_selector;
 
 // Check if the source plugin file exists
 if (!`filetest -f $pluginSourceFilePath`) {
@@ -86,9 +86,9 @@ print("Package installation complete.\n");
 progressWindow -endProgress;
 
 // Load the plugin, this might fail if the plugin contains python errors
-loadPlugin $MY_PLUGIN_NAME;
+loadPlugin $color_face_selector;
 // Enable the plugin
-eval("plug-inInfo -q -loaded " + $MY_PLUGIN_NAME);
+eval("plug-inInfo -q -loaded " + $color_face_selector);
 
 
 
