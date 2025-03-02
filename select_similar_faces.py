@@ -9,16 +9,27 @@ MENU_NAME = "ToolsMenu"
 MENU_LABEL = "Tools"
 MENU_ENTRY_LABEL = "Select Similar Colored Faces"
 MENU_PARENT = "MayaWindow"
+DEFAULT_THRESHOLD = 1
 
 __menu_entry_name = ""  # Store generated menu item, used when unregistering
+_last_message = None  # Store the last displayed message
 
 
 def maya_useNewAPI():
-    """
-    The presence of this function tells Maya that the plugin produces, and
-    expects to be passed, objects created using the Maya Python API 2.0.
-    """
     pass
+
+
+def display_message(message, level="info"):
+    """Displays messages only if they are different from the last one."""
+    global _last_message
+    if message != _last_message:
+        _last_message = message
+        if level == "info":
+            om.MGlobal.displayInfo(message)
+        elif level == "warning":
+            om.MGlobal.displayWarning(message)
+        elif level == "error":
+            om.MGlobal.displayError(message)
 
 
 class SelectSimilarColoredFacesCmd(om.MPxCommand):
@@ -53,20 +64,24 @@ def unregister_command(plugin):
         raise e
 
 
-def select_similar_colored_faces():
+def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
     """Selects faces on a mesh that have similar vertex colors to the currently selected face."""
     try:
         selection = cmds.ls(selection=True)
         if not selection:
-            om.MGlobal.displayWarning("Please, select a face.")
+            display_message("Please, select a face.", "warning")
             return
 
         mesh = selection[0].split('.')[0]
+        colors = None
 
-        # Get the RGB color of the selected face's vertex
-        colors = cmds.polyColorPerVertex(selection[0], query=True, colorRGB=True)
-        if not colors or len(colors) == 0:
-            om.MGlobal.displayWarning("No vertex colors found on the selected face.")
+        try:
+            # Get the RGB color of the selected face's vertex
+            colors = cmds.polyColorPerVertex(selection[0], query=True, colorRGB=True)
+            if not colors or len(colors) == 0:
+                raise ValueError("No vertex colors found on the selected face.")
+        except Exception:
+            display_message("No vertex colors found on the selected face.", "warning")
             return
 
         # Compute the average color for the selected face
@@ -74,9 +89,9 @@ def select_similar_colored_faces():
         g_average = sum(colors[1::3]) / len(colors[1::3])
         b_average = sum(colors[2::3]) / len(colors[2::3])
         target_color = (r_average, g_average, b_average)
-
-        # Threshold for color matching
-        threshold = 0.01
+        
+        # Convert percentage to actual threshold
+        threshold = threshold / 100.0
 
         # Get all faces in the mesh
         all_faces = cmds.ls(mesh + '.f[*]', flatten=True)
@@ -98,15 +113,32 @@ def select_similar_colored_faces():
         if matching_faces:
             cmds.select(matching_faces, replace=True)
         else:
-            om.MGlobal.displayInfo("No matching faces found.")
+            display_message("No matching faces found.", "info")
             
     except Exception as e:
-        om.MGlobal.displayError(f"Error while processing: {e}")
+        display_message(f"Error while processing: {e}", "error")
 
 
 def show(*args):
     """Runs the command when clicked in the Maya menu."""
+    open_gui()
     cmds.selectSimilarColoredFaces()
+
+
+def open_gui():
+    """Creates the GUI for selecting similar faces with a threshold slider."""
+    if cmds.window("SelectSimilarFacesWindow", exists=True):
+        cmds.deleteUI("SelectSimilarFacesWindow")
+    
+    window = cmds.window("SelectSimilarFacesWindow", title="Select Similar Faces", widthHeight=(300, 100), resizeToFitChildren=True)
+    cmds.columnLayout(adjustableColumn=True)
+    
+    threshold_slider = cmds.floatSliderGrp(
+        label="Color Tolerance (%)", field=True, minValue=0, maxValue=100, fieldMinValue=0, fieldMaxValue=100, value=DEFAULT_THRESHOLD,
+        dragCommand=lambda x: select_similar_colored_faces(cmds.floatSliderGrp(threshold_slider, query=True, value=True)))
+    
+    cmds.showWindow(window)
+    cmds.scriptJob(event=["SelectionChanged", lambda: select_similar_colored_faces(cmds.floatSliderGrp(threshold_slider, query=True, value=True))], parent=window)
 
 
 def loadMenu():
