@@ -21,8 +21,6 @@ def maya_useNewAPI():
     pass
 
 
-# =============================== Command ===========================================
-
 class SelectSimilarColoredFacesCmd(om.MPxCommand):
     command_name = "selectSimilarColoredFaces"
 
@@ -55,13 +53,11 @@ def unregister_command(plugin):
         raise e
 
 
-# =============================== Function Implementation ===========================================
-
 def select_similar_colored_faces():
     """Selects faces on a mesh that have similar vertex colors to the currently selected face."""
     selection = cmds.ls(selection=True)
     if not selection:
-        om.MGlobal.displayWarning("Please select a face.")
+        om.MGlobal.displayWarning("Please, select a face.")
         return
 
     mesh = selection[0].split('.')[0]
@@ -104,8 +100,6 @@ def select_similar_colored_faces():
         om.MGlobal.displayInfo("No matching faces found.")
 
 
-# =============================== Menu ===========================================
-
 def show(*args):
     """Runs the command when clicked in the Maya menu."""
     cmds.selectSimilarColoredFaces()
@@ -135,8 +129,6 @@ def unloadMenuItem():
         if not cmds.menu(menu_long_name, query=True, itemArray=True):
             cmds.deleteUI(menu_long_name, menu=True)
 
-
-# =============================== Plugin (Un)Load ===========================================
 
 def initializePlugin(plugin):
     """Code to run when the Maya plugin is enabled."""
