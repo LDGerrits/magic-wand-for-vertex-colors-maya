@@ -15,6 +15,9 @@ __menu_entry_name = ""  # Store generated menu item, used when unregistering
 _last_message = None  # Store the last displayed message
 _threshold_slider = None  # Store reference to the threshold slider
 _last_threshold_value = DEFAULT_THRESHOLD  # Store last used threshold value
+_color_picker = None  # Store reference to the color picker
+_fill_color = [1.0, 1.0, 1.0]  # Default white color
+_fill_frame = None  # Store reference to the collapsible frame
 
 
 def maya_useNewAPI():
@@ -45,12 +48,48 @@ def selection_changed_callback(*args):
 		cmds.selectSimilarColoredFaces(_last_threshold_value)
 
 
+def apply_fill_color(*args):
+	"""Applies the selected fill color to all selected vertices."""
+	global _fill_color
+	selection = cmds.ls(selection=True, flatten=True)
+	if not selection:
+		display_message("Please select vertices to apply the color.", "info")
+		return
+
+	try:
+		for vertex in selection:
+			cmds.polyColorPerVertex(vertex, colorRGB=_fill_color, colorDisplayOption=True)
+	except Exception as e:
+		display_message(f"Error applying vertex colors: {e}", "error")
+
+
+def update_fill_color(*args):
+	"""Updates the fill color from the RGB UI input and applies it to selected vertices."""
+	global _color_picker, _fill_color
+	if _color_picker:
+		_fill_color = cmds.colorSliderGrp(_color_picker, query=True, rgbValue=True)
+
+
+def clear_vertex_colors(*args):
+	"""Removes vertex colors from the selected faces."""
+	selection = cmds.ls(selection=True, flatten=True)
+	if not selection:
+		display_message("Please, select faces or vertices to clear vertex colors.", "info")
+		return
+	
+	for face in selection:
+		try:
+			cmds.polyColorPerVertex(face, remove=True)
+		except Exception as e:
+			continue
+
+
 class SelectSimilarColoredFacesCmd(om.MPxCommand):
 	command_name = "selectSimilarColoredFaces"
 
 	def __init__(self):
 		om.MPxCommand.__init__(self)
-		
+
 	@staticmethod
 	def cmdCreator():
 		return SelectSimilarColoredFacesCmd()
@@ -92,7 +131,7 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 		try:
 			# Get the RGB color of the selected face's vertex
 			colors = cmds.polyColorPerVertex(original_face, query=True, colorRGB=True)
-			if not colors or len(colors) == 0:
+			if not colors:
 				raise ValueError("No vertex colors found on the selected face.")
 		except Exception:
 			display_message("No vertex colors found on the selected face.", "warning")
@@ -103,7 +142,7 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 		g_average = sum(colors[1::3]) / len(colors[1::3])
 		b_average = sum(colors[2::3]) / len(colors[2::3])
 		target_color = (r_average, g_average, b_average)
-		
+
 		# Convert percentage to actual threshold
 		threshold = threshold / 100.0
 
@@ -130,15 +169,15 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 
 		# Select matching faces
 		if matching_faces:
-      		# Only update selection if it has changed to prevent recursive calls
+			# Only update selection if it has changed to prevent recursive calls
 			current_selection = cmds.ls(selection=True, flatten=True)
 			if set(current_selection) != set(matching_faces):
 				cmds.select(matching_faces, replace=True)
 		else:
 			display_message("No matching faces found.", "info")
-			
+
 	except Exception as e:
-		display_message(f"Error while processing: {e}", "error")
+		display_message(f"Error updating selection: {e}", "error")
 
 
 def show(*args):
@@ -151,17 +190,30 @@ def open_gui():
 	"""Creates the GUI for selecting similar faces with a threshold slider."""
 	global _threshold_slider
 	global _last_threshold_value
-	
+	global _color_picker
+	global _fill_frame
+
 	if cmds.window("MagicWandForVertexColors", exists=True):
 		cmds.deleteUI("MagicWandForVertexColors")
-	
+
 	window = cmds.window("MagicWandForVertexColors", title=MENU_ENTRY_LABEL, widthHeight=(1, 1), resizeToFitChildren=True)
 	cmds.columnLayout(adjustableColumn=True)
-	
+
 	_threshold_slider = cmds.floatSliderGrp(
 		label="Color Tolerance (%)", field=True, minValue=0, maxValue=100, fieldMinValue=0, fieldMaxValue=100, value=_last_threshold_value,
 		dragCommand=lambda x: selection_changed_callback())
-	
+
+	_fill_frame = cmds.frameLayout(label="Fill Color", collapsable=True, collapse=True)
+	cmds.columnLayout(adjustableColumn=True)
+	_color_picker = cmds.colorSliderGrp(label="Fill Color", rgb=_fill_color, changeCommand=update_fill_color)
+	# cmds.button(label="Apply Fill", command=apply_fill_color)
+	# cmds.button(label="Clear", command=clear_vertex_colors)
+	cmds.separator(style="in")
+	cmds.button(label="Apply Fill", command=apply_fill_color, backgroundColor=[0.3, 0.8, 0.3])
+	cmds.button(label="Clear", command=clear_vertex_colors, backgroundColor=[0.8, 0.3, 0.3])
+	cmds.setParent('..')
+	cmds.setParent('..')
+
 	cmds.showWindow(window)
 	cmds.scriptJob(event=["SelectionChanged", selection_changed_callback], parent=window)
 
@@ -175,7 +227,7 @@ def loadMenu():
 
 	if not cmds.menu(f"{MENU_PARENT}|{MENU_NAME}", exists=True):
 		cmds.menu(MENU_NAME, label=MENU_LABEL, parent=MENU_PARENT)
-	
+
 	__menu_entry_name = cmds.menuItem(label=MENU_ENTRY_LABEL, command=show, parent=MENU_NAME)
 
 
@@ -183,10 +235,10 @@ def unloadMenuItem():
 	"""Remove the created Maya menu entry, runs on plugin disable"""
 	if cmds.menu(f"{MENU_PARENT}|{MENU_NAME}", exists=True):
 		menu_long_name = f"{MENU_PARENT}|{MENU_NAME}"
-		
+
 		if cmds.menuItem(__menu_entry_name, exists=True):
 			cmds.deleteUI(__menu_entry_name, menuItem=True)
-		
+
 		if not cmds.menu(menu_long_name, query=True, itemArray=True):
 			cmds.deleteUI(menu_long_name, menu=True)
 
