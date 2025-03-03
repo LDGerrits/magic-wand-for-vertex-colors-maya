@@ -203,16 +203,17 @@ def open_gui():
 		label="Color Tolerance (%)", field=True, minValue=0, maxValue=100, fieldMinValue=0, fieldMaxValue=100, value=_last_threshold_value,
 		dragCommand=lambda x: selection_changed_callback())
 
-	_fill_frame = cmds.frameLayout(label="Fill Color", collapsable=True, collapse=True)
-	cmds.columnLayout(adjustableColumn=True)
-	_color_picker = cmds.colorSliderGrp(label="Fill Color", rgb=_fill_color, changeCommand=update_fill_color)
-	# cmds.button(label="Apply Fill", command=apply_fill_color)
-	# cmds.button(label="Clear", command=clear_vertex_colors)
 	cmds.separator(style="in")
-	cmds.button(label="Apply Fill", command=apply_fill_color, backgroundColor=[0.3, 0.8, 0.3])
-	cmds.button(label="Clear", command=clear_vertex_colors, backgroundColor=[0.8, 0.3, 0.3])
+
+	_fill_frame = cmds.frameLayout(label="Fill Color", collapsable=True, collapse=True, borderStyle="etchedOut")
+	cmds.columnLayout(adjustableColumn=True, backgroundColor=[0.25, 0.25, 0.25])
+	_color_picker = cmds.colorSliderGrp(label="Fill Color", rgb=_fill_color, changeCommand=update_fill_color)
+	cmds.button(label="Apply Fill", command=apply_fill_color)
+	cmds.button(label="Clear", command=clear_vertex_colors)
 	cmds.setParent('..')
 	cmds.setParent('..')
+
+	cmds.separator(style="in")
 
 	cmds.showWindow(window)
 	cmds.scriptJob(event=["SelectionChanged", selection_changed_callback], parent=window)
