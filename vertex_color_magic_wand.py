@@ -85,12 +85,13 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 			display_message("Please, select a face.", "info")
 			return
 
-		mesh = selection[0].split('.')[0]
+		original_face = selection[0]
+		mesh = original_face.split('.')[0]
 		colors = None
 
 		try:
 			# Get the RGB color of the selected face's vertex
-			colors = cmds.polyColorPerVertex(selection[0], query=True, colorRGB=True)
+			colors = cmds.polyColorPerVertex(original_face, query=True, colorRGB=True)
 			if not colors or len(colors) == 0:
 				raise ValueError("No vertex colors found on the selected face.")
 		except Exception:
@@ -122,9 +123,17 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 					abs(b_avg - target_color[2]) < threshold):
 					matching_faces.append(face)
 
+		# Ensure original face is the first in selection
+		if original_face in matching_faces:
+			matching_faces.remove(original_face)
+			matching_faces.insert(0, original_face)
+
 		# Select matching faces
 		if matching_faces:
-			cmds.select(matching_faces, replace=True)
+      		# Only update selection if it has changed to prevent recursive calls
+			current_selection = cmds.ls(selection=True, flatten=True)
+			if set(current_selection) != set(matching_faces):
+				cmds.select(matching_faces, replace=True)
 		else:
 			display_message("No matching faces found.", "info")
 			
@@ -143,10 +152,10 @@ def open_gui():
 	global _threshold_slider
 	global _last_threshold_value
 	
-	if cmds.window("SelectSimilarFacesWindow", exists=True):
-		cmds.deleteUI("SelectSimilarFacesWindow")
+	if cmds.window("MagicWandForVertexColors", exists=True):
+		cmds.deleteUI("MagicWandForVertexColors")
 	
-	window = cmds.window("SelectSimilarFacesWindow", title="Select Similar Faces", widthHeight=(300, 100), resizeToFitChildren=True)
+	window = cmds.window("MagicWandForVertexColors", title=MENU_ENTRY_LABEL, widthHeight=(1, 1), resizeToFitChildren=True)
 	cmds.columnLayout(adjustableColumn=True)
 	
 	_threshold_slider = cmds.floatSliderGrp(
