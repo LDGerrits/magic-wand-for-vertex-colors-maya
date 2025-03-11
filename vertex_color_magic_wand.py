@@ -1,8 +1,8 @@
-import sys
 import maya.api.OpenMaya as om
 import maya.cmds as cmds
 import maya.mel as mel
 import math
+import colorsys
 
 # Plugin information
 PLUGIN_NAME = "Magic Wand for Vertex Colors"
@@ -12,15 +12,20 @@ MENU_ENTRY_LABEL = "Magic Wand for Vertex Colors"
 MENU_PARENT = "MayaWindow"
 DEFAULT_THRESHOLD = 1
 MAX_RGB_DISTANCE = math.sqrt(3)  # max distance possible in RGB
+DEFAULT_INACTIVE_COLOR = [0.0, 0.0, 0.0]
 
 __menu_entry_name = ""  # Store generated menu item, used when unregistering
 _last_message = None  # Store the last displayed message
 _threshold_slider = None  # Store reference to the threshold slider
 _last_threshold_value = DEFAULT_THRESHOLD  # Store last used threshold value
 _color_picker = None  # Store reference to the color picker
-_fill_color = [1.0, 1.0, 1.0]  # Default white color
+_fill_color = DEFAULT_INACTIVE_COLOR
 _fill_frame = None  # Store reference to the collapsible frame
 _continuous_checkbox = None
+_target_color = None  # Persistently stores the initial selected face color
+_initial_face = None  # Stores the initially selected face
+_current_color_display = None  # UI element for showing current selected color
+_current_color_text = None  # Text field for RGB/HSV values
 
 
 def maya_useNewAPI():
@@ -42,13 +47,34 @@ def display_message(message, level="info"):
 
 def selection_changed_callback(*args):
 	"""Callback function that runs whenever the selection changes."""
-	global _threshold_slider, _last_threshold_value
+	global _threshold_slider, _last_threshold_value, _target_color, _initial_face
+
+	current_selection = cmds.ls(selection=True, flatten=True)
+
+	# Case 1: Selection is cleared (reset variables)
+	if not current_selection:
+		om.MGlobal.displayInfo("SELECTION CLEARED")
+		_initial_face = None
+		_target_color = None
+		update_current_color_display(None)  # Clear UI
+		return
+
+	# Case 2: The current `_initial_face` is NO LONGER in the selection -> update it
+	if _initial_face not in current_selection:
+		# A new face is explicitly selected by the user
+		if ".f[" in current_selection[0]:
+			om.MGlobal.displayInfo("NEW FACE SELECTED")
+			selected_face = current_selection[0]
+			_initial_face = selected_face
+			_target_color = get_face_color(_initial_face)
+			update_current_color_display(_target_color)
+
+	# Case 3: User moves the slider, but selection remains
 	if _threshold_slider and cmds.floatSliderGrp(_threshold_slider, exists=True):
 		threshold_value = cmds.floatSliderGrp(_threshold_slider, query=True, value=True)
-		_last_threshold_value = threshold_value  # Store last used value
-		select_similar_colored_faces(threshold_value)
-	else:
-		select_similar_colored_faces(_last_threshold_value)
+		_last_threshold_value = threshold_value
+
+	select_similar_colored_faces(threshold_value)
 
 
 def apply_fill_color(*args):
@@ -68,7 +94,7 @@ def apply_fill_color(*args):
 		display_message(f"Error applying vertex colors: {e}", "error")
 
 
-def update_fill_color(*args):
+def fill_color_changed_callback(*args):
 	"""Updates the fill color from the RGB UI input and applies it to selected vertices."""
 	global _color_picker, _fill_color
 	if _color_picker:
@@ -94,32 +120,14 @@ def clear_vertex_colors(*args):
 def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 	"""Selects faces on a mesh that have similar vertex colors to the currently selected face."""
 	try:
-		global _continuous_checkbox
+		global _continuous_checkbox, _initial_face, _target_color
 
-		selection = cmds.ls(selection=True)
-		if not selection:
+		selection = cmds.ls(selection=True, flatten=True)
+		if not selection or not _target_color:
 			display_message("Please, select a face.", "info")
 			return
 
-		original_face = selection[0]
-		mesh = original_face.split(".")[0]
-
-		colors = None
-		try:
-			# Get the RGB color of the selected face's vertex
-			colors = cmds.polyColorPerVertex(original_face, query=True, colorRGB=True)
-			if not colors:
-				raise ValueError("No vertex colors found on the selected face.")
-		except Exception:
-			display_message("No vertex colors found on the selected face.", "warning")
-			return
-
-		# Compute the average color for the selected face
-		target_color = [
-			sum(colors[0::3]) / len(colors[0::3]),
-			sum(colors[1::3]) / len(colors[1::3]),
-			sum(colors[2::3]) / len(colors[2::3]),
-		]
+		mesh = _initial_face.split(".")[0]
 
 		# Convert percentage to actual threshold
 		threshold_distance = (threshold / 100.0) * MAX_RGB_DISTANCE
@@ -128,17 +136,12 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 
 		if continuous:
 			matching_faces = continuous_selection(
-				mesh, original_face, target_color, threshold_distance
+				mesh, _initial_face, _target_color, threshold_distance
 			)
 		else:
 			matching_faces = non_continuous_selection(
-				mesh, target_color, threshold_distance
+				mesh, _target_color, threshold_distance
 			)
-
-		# Ensure original face is the first in selection
-		if original_face in matching_faces:
-			matching_faces.remove(original_face)
-			matching_faces.insert(0, original_face)
 
 		# Select matching faces
 		if matching_faces:
@@ -213,6 +216,33 @@ def non_continuous_selection(mesh, target_color, threshold_distance):
 	return matching_faces
 
 
+def update_current_color_display(color_rgb):
+	global _current_color_display
+	global _current_color_text
+
+	if color_rgb is None:
+		color_rgb = DEFAULT_INACTIVE_COLOR
+
+	if _current_color_display:
+		cmds.canvas(_current_color_display, edit=True, rgbValue=color_rgb)
+  
+	# Convert RGB (0-1) to RGB (0-255)
+	rgb_255 = tuple(int(c * 255) for c in color_rgb)
+
+	# Convert RGB to HSV
+	hsv = colorsys.rgb_to_hsv(color_rgb[0], color_rgb[1], color_rgb[2])
+	hsv_rounded = (round(hsv[0] * 360, 2), round(hsv[1] * 100, 2), round(hsv[2] * 100, 2))
+
+	# Update UI elements
+	cmds.canvas(_current_color_display, edit=True, rgbValue=color_rgb)
+	cmds.text(
+		_current_color_text, edit=True,
+		label=f"RGB (0-1): {tuple(round(c, 2) for c in color_rgb)}\n"
+			  f"RGB (0-255): {rgb_255}\n"
+			  f"HSV: {hsv_rounded}"
+	)
+
+
 def show(*args):
 	"""Runs the command when clicked in the Maya menu."""
 	open_gui()
@@ -226,6 +256,8 @@ def open_gui():
 	global _color_picker
 	global _fill_frame
 	global _continuous_checkbox
+	global _current_color_display
+	global _current_color_text
 
 	if cmds.window("MagicWandForVertexColors", exists=True):
 		cmds.deleteUI("MagicWandForVertexColors")
@@ -237,6 +269,13 @@ def open_gui():
 		resizeToFitChildren=True,
 	)
 	cmds.columnLayout(adjustableColumn=True)
+
+	cmds.rowLayout(numberOfColumns=2, columnWidth2=(50, 200), adjustableColumn=2)
+	_current_color_display = cmds.canvas(rgbValue=DEFAULT_INACTIVE_COLOR, width=150, height=50)
+	_current_color_text = cmds.text(label="RGB (0-1): (1.0, 1.0, 1.0)\nRGB (0-255): (255, 255, 255)\nHSV: (0, 0, 1)", align='left')
+	cmds.setParent('..')
+
+	cmds.separator(style="in")
 
 	_threshold_slider = cmds.floatSliderGrp(
 		label="Color Tolerance (%)",
@@ -252,22 +291,21 @@ def open_gui():
 	cmds.separator(style="in")
  
 	_continuous_checkbox = cmds.checkBox(
-		label="Continuous Selection", value=True, changeCommand=lambda x: selection_changed_callback()
+		label="Continuous Selection", value=True, align='middle', changeCommand=lambda x: selection_changed_callback()
 	)
 
 	cmds.separator(style="in")
-
-	_fill_frame = cmds.frameLayout(label="Fill Color", collapsable=True, collapse=True)
-	cmds.columnLayout(adjustableColumn=True, backgroundColor=[0.25, 0.25, 0.25])
+ 
+	cmds.rowLayout(numberOfColumns=2, columnWidth2=(300, 50), adjustableColumn=2)
 	_color_picker = cmds.colorSliderGrp(
-		label="Fill Color", rgb=_fill_color, changeCommand=update_fill_color
+		label="Fill Color", rgb=_fill_color, changeCommand=fill_color_changed_callback
 	)
-	cmds.button(label="Apply Fill", command=apply_fill_color)
-	cmds.button(label="Clear", command=clear_vertex_colors)
-	cmds.setParent("..")
+	cmds.button(label="Apply Fill", command=apply_fill_color, width=50)
 	cmds.setParent("..")
 
 	cmds.separator(style="in")
+
+	cmds.button(label="Clear Color", command=clear_vertex_colors)
 
 	cmds.showWindow(window)
 	cmds.scriptJob(
