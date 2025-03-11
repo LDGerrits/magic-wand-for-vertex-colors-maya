@@ -87,7 +87,7 @@ progressWindow -endProgress;
 // Load the plugin, this might fail if the plugin contains python errors
 loadPlugin $PLUGIN_NAME;
 // Enable the plugin
-eval("plug-inInfo -q -loaded " + $PLUGIN_NAME);
+eval("pluginInfo -q -loaded " + $PLUGIN_NAME);
 
 
 
