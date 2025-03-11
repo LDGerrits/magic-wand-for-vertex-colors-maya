@@ -2,6 +2,7 @@ import sys
 import maya.api.OpenMaya as om
 import maya.cmds as cmds
 import maya.mel as mel
+import math
 
 # Plugin information
 PLUGIN_NAME = "Magic Wand for Vertex Colors"
@@ -10,6 +11,7 @@ MENU_LABEL = "Tools"
 MENU_ENTRY_LABEL = "Magic Wand for Vertex Colors"
 MENU_PARENT = "MayaWindow"
 DEFAULT_THRESHOLD = 1
+MAX_RGB_DISTANCE = math.sqrt(3)  # max distance possible in RGB
 
 __menu_entry_name = ""  # Store generated menu item, used when unregistering
 _last_message = None  # Store the last displayed message
@@ -43,9 +45,9 @@ def selection_changed_callback(*args):
 	if _threshold_slider and cmds.floatSliderGrp(_threshold_slider, exists=True):
 		threshold_value = cmds.floatSliderGrp(_threshold_slider, query=True, value=True)
 		_last_threshold_value = threshold_value # Store last used value
-		cmds.selectSimilarColoredFaces(threshold_value)
+		select_similar_colored_faces(threshold_value)
 	else:
-		cmds.selectSimilarColoredFaces(_last_threshold_value)
+		select_similar_colored_faces(_last_threshold_value)
 
 
 def apply_fill_color(*args):
@@ -84,38 +86,6 @@ def clear_vertex_colors(*args):
 			continue
 
 
-class SelectSimilarColoredFacesCmd(om.MPxCommand):
-	command_name = "selectSimilarColoredFaces"
-
-	def __init__(self):
-		om.MPxCommand.__init__(self)
-
-	@staticmethod
-	def cmdCreator():
-		return SelectSimilarColoredFacesCmd()
-
-	def doIt(self, args):
-		select_similar_colored_faces()
-
-
-def register_command(plugin):
-	pluginFn = om.MFnPlugin(plugin)
-	try:
-		pluginFn.registerCommand(SelectSimilarColoredFacesCmd.command_name, SelectSimilarColoredFacesCmd.cmdCreator)
-	except Exception as e:
-		sys.stderr.write(f"Failed to register command: {SelectSimilarColoredFacesCmd.command_name}\n")
-		raise e
-
-
-def unregister_command(plugin):
-	pluginFn = om.MFnPlugin(plugin)
-	try:
-		pluginFn.deregisterCommand(SelectSimilarColoredFacesCmd.command_name)
-	except Exception as e:
-		sys.stderr.write(f"Failed to unregister command: {SelectSimilarColoredFacesCmd.command_name}\n")
-		raise e
-
-
 def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 	"""Selects faces on a mesh that have similar vertex colors to the currently selected face."""
 	try:
@@ -144,7 +114,7 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 		target_color = (r_average, g_average, b_average)
 
 		# Convert percentage to actual threshold
-		threshold = threshold / 100.0
+		threshold = (threshold / 100.0) * MAX_RGB_DISTANCE
 
 		# Get all faces in the mesh
 		all_faces = cmds.ls(mesh + '.f[*]', flatten=True)
@@ -157,9 +127,14 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 				g_avg = sum(face_colors[1::3]) / len(face_colors[1::3])
 				b_avg = sum(face_colors[2::3]) / len(face_colors[2::3])
 
-				if (abs(r_avg - target_color[0]) < threshold and
-					abs(g_avg - target_color[1]) < threshold and
-					abs(b_avg - target_color[2]) < threshold):
+				# Compute Euclidean distance between colors
+				distance = math.sqrt(
+					(r_avg - target_color[0]) ** 2 +
+					(g_avg - target_color[1]) ** 2 +
+					(b_avg - target_color[2]) ** 2
+				)
+
+				if distance <= threshold:
 					matching_faces.append(face)
 
 		# Ensure original face is the first in selection
@@ -183,7 +158,7 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 def show(*args):
 	"""Runs the command when clicked in the Maya menu."""
 	open_gui()
-	cmds.selectSimilarColoredFaces(_last_threshold_value)
+	select_similar_colored_faces(_last_threshold_value)
 
 
 def open_gui():
@@ -205,7 +180,7 @@ def open_gui():
 
 	cmds.separator(style="in")
 
-	_fill_frame = cmds.frameLayout(label="Fill Color", collapsable=True, collapse=True, borderStyle="etchedOut")
+	_fill_frame = cmds.frameLayout(label="Fill Color", collapsable=True, collapse=True)
 	cmds.columnLayout(adjustableColumn=True, backgroundColor=[0.25, 0.25, 0.25])
 	_color_picker = cmds.colorSliderGrp(label="Fill Color", rgb=_fill_color, changeCommand=update_fill_color)
 	cmds.button(label="Apply Fill", command=apply_fill_color)
@@ -246,13 +221,11 @@ def unloadMenuItem():
 
 def initializePlugin(plugin):
 	"""Code to run when the Maya plugin is enabled."""
-	register_command(plugin)
 	loadMenu()
 	om.MGlobal.displayInfo(f"{PLUGIN_NAME} plugin loaded.")
 
 
 def uninitializePlugin(plugin):
 	"""Code to run when the Maya plugin is disabled."""
-	unregister_command(plugin)
 	unloadMenuItem()
 	om.MGlobal.displayInfo(f"{PLUGIN_NAME} plugin unloaded.")
