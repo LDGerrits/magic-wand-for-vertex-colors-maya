@@ -84,12 +84,14 @@ def apply_fill_color(*args):
 	if not selection:
 		display_message("Please select vertices to apply the color.", "info")
 		return
-
 	try:
 		for vertex in selection:
 			cmds.polyColorPerVertex(
 				vertex, colorRGB=_fill_color, colorDisplayOption=True
 			)
+		if _initial_face:
+			_target_color = get_face_color(_initial_face)
+			update_current_color_display(_target_color)
 	except Exception as e:
 		display_message(f"Error applying vertex colors: {e}", "error")
 
@@ -242,6 +244,15 @@ def update_current_color_display(color_rgb):
 			  f"HSV: {hsv_rounded}"
 	)
 
+def set_fill_color_to_target(*args):
+	global _fill_color, _target_color, _color_picker
+
+	if _target_color:
+		_fill_color = _target_color  # Set fill color to target color
+
+		# Update the color picker UI to reflect the new fill color
+		if _color_picker and cmds.colorSliderGrp(_color_picker, query=True, exists=True):
+			cmds.colorSliderGrp(_color_picker, edit=True, rgbValue=_fill_color)
 
 def show(*args):
 	"""Runs the command when clicked in the Maya menu."""
@@ -270,13 +281,6 @@ def open_gui():
 	)
 	cmds.columnLayout(adjustableColumn=True)
 
-	cmds.rowLayout(numberOfColumns=2, columnWidth2=(50, 200), adjustableColumn=2)
-	_current_color_display = cmds.canvas(rgbValue=DEFAULT_INACTIVE_COLOR, width=150, height=50)
-	_current_color_text = cmds.text(label="RGB (0-1): (1.0, 1.0, 1.0)\nRGB (0-255): (255, 255, 255)\nHSV: (0, 0, 1)", align='left')
-	cmds.setParent('..')
-
-	cmds.separator(style="in")
-
 	_threshold_slider = cmds.floatSliderGrp(
 		label="Color Tolerance (%)",
 		field=True,
@@ -286,22 +290,31 @@ def open_gui():
 		fieldMaxValue=100,
 		value=_last_threshold_value,
 		dragCommand=lambda x: selection_changed_callback(),
+		columnWidth=(1, 100)
 	)
+
+	cmds.separator(style="in")
+
+	cmds.rowLayout(numberOfColumns=3, columnWidth3=(50, 50, 50), adjustableColumn=2)
+	cmds.button(label="Set Fill\nColor", width=50, height=50, command=set_fill_color_to_target)
+	_current_color_display = cmds.canvas(rgbValue=DEFAULT_INACTIVE_COLOR, width=150, height=50)
+	_current_color_text = cmds.text(label="RGB (0-1): (1.0, 1.0, 1.0)\nRGB (0-255): (255, 255, 255)\nHSV: (0, 0, 1)", align='left')
+	cmds.setParent('..')
+
+	cmds.separator(style="in")
+ 
+	cmds.rowLayout(numberOfColumns=2, columnWidth2=(100, 100), adjustableColumn=2)
+	cmds.button(label="Apply Fill Color", command=apply_fill_color, width=100)
+	_color_picker = cmds.colorSliderGrp(
+		rgb=_fill_color, changeCommand=fill_color_changed_callback, columnWidth=(1, 100)
+	)
+	cmds.setParent("..")
 
 	cmds.separator(style="in")
  
 	_continuous_checkbox = cmds.checkBox(
 		label="Continuous Selection", value=True, align='middle', changeCommand=lambda x: selection_changed_callback()
 	)
-
-	cmds.separator(style="in")
- 
-	cmds.rowLayout(numberOfColumns=2, columnWidth2=(300, 50), adjustableColumn=2)
-	_color_picker = cmds.colorSliderGrp(
-		label="Fill Color", rgb=_fill_color, changeCommand=fill_color_changed_callback
-	)
-	cmds.button(label="Apply Fill", command=apply_fill_color, width=50)
-	cmds.setParent("..")
 
 	cmds.separator(style="in")
 
