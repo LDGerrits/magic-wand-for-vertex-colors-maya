@@ -20,6 +20,7 @@ _last_threshold_value = DEFAULT_THRESHOLD  # Store last used threshold value
 _color_picker = None  # Store reference to the color picker
 _fill_color = [1.0, 1.0, 1.0]  # Default white color
 _fill_frame = None  # Store reference to the collapsible frame
+_continuous_checkbox = None
 
 
 def maya_useNewAPI():
@@ -44,7 +45,7 @@ def selection_changed_callback(*args):
 	global _threshold_slider, _last_threshold_value
 	if _threshold_slider and cmds.floatSliderGrp(_threshold_slider, exists=True):
 		threshold_value = cmds.floatSliderGrp(_threshold_slider, query=True, value=True)
-		_last_threshold_value = threshold_value # Store last used value
+		_last_threshold_value = threshold_value  # Store last used value
 		select_similar_colored_faces(threshold_value)
 	else:
 		select_similar_colored_faces(_last_threshold_value)
@@ -60,7 +61,9 @@ def apply_fill_color(*args):
 
 	try:
 		for vertex in selection:
-			cmds.polyColorPerVertex(vertex, colorRGB=_fill_color, colorDisplayOption=True)
+			cmds.polyColorPerVertex(
+				vertex, colorRGB=_fill_color, colorDisplayOption=True
+			)
 	except Exception as e:
 		display_message(f"Error applying vertex colors: {e}", "error")
 
@@ -76,9 +79,11 @@ def clear_vertex_colors(*args):
 	"""Removes vertex colors from the selected faces."""
 	selection = cmds.ls(selection=True, flatten=True)
 	if not selection:
-		display_message("Please, select faces or vertices to clear vertex colors.", "info")
+		display_message(
+			"Please, select faces or vertices to clear vertex colors.", "info"
+		)
 		return
-	
+
 	for face in selection:
 		try:
 			cmds.polyColorPerVertex(face, remove=True)
@@ -89,15 +94,17 @@ def clear_vertex_colors(*args):
 def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 	"""Selects faces on a mesh that have similar vertex colors to the currently selected face."""
 	try:
+		global _continuous_checkbox
+
 		selection = cmds.ls(selection=True)
 		if not selection:
 			display_message("Please, select a face.", "info")
 			return
 
 		original_face = selection[0]
-		mesh = original_face.split('.')[0]
-		colors = None
+		mesh = original_face.split(".")[0]
 
+		colors = None
 		try:
 			# Get the RGB color of the selected face's vertex
 			colors = cmds.polyColorPerVertex(original_face, query=True, colorRGB=True)
@@ -108,34 +115,25 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 			return
 
 		# Compute the average color for the selected face
-		r_average = sum(colors[0::3]) / len(colors[0::3])
-		g_average = sum(colors[1::3]) / len(colors[1::3])
-		b_average = sum(colors[2::3]) / len(colors[2::3])
-		target_color = (r_average, g_average, b_average)
+		target_color = [
+			sum(colors[0::3]) / len(colors[0::3]),
+			sum(colors[1::3]) / len(colors[1::3]),
+			sum(colors[2::3]) / len(colors[2::3]),
+		]
 
 		# Convert percentage to actual threshold
-		threshold = (threshold / 100.0) * MAX_RGB_DISTANCE
+		threshold_distance = (threshold / 100.0) * MAX_RGB_DISTANCE
 
-		# Get all faces in the mesh
-		all_faces = cmds.ls(mesh + '.f[*]', flatten=True)
+		continuous = cmds.checkBox(_continuous_checkbox, query=True, value=True)
 
-		matching_faces = []
-		for face in all_faces:
-			face_colors = cmds.polyColorPerVertex(face, query=True, colorRGB=True)
-			if face_colors:
-				r_avg = sum(face_colors[0::3]) / len(face_colors[0::3])
-				g_avg = sum(face_colors[1::3]) / len(face_colors[1::3])
-				b_avg = sum(face_colors[2::3]) / len(face_colors[2::3])
-
-				# Compute Euclidean distance between colors
-				distance = math.sqrt(
-					(r_avg - target_color[0]) ** 2 +
-					(g_avg - target_color[1]) ** 2 +
-					(b_avg - target_color[2]) ** 2
-				)
-
-				if distance <= threshold:
-					matching_faces.append(face)
+		if continuous:
+			matching_faces = continuous_selection(
+				mesh, original_face, target_color, threshold_distance
+			)
+		else:
+			matching_faces = non_continuous_selection(
+				mesh, target_color, threshold_distance
+			)
 
 		# Ensure original face is the first in selection
 		if original_face in matching_faces:
@@ -155,6 +153,66 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 		display_message(f"Error updating selection: {e}", "error")
 
 
+def color_distance(color_a, color_b):
+	return math.sqrt(sum((a - b) ** 2 for a, b in zip(color_a, color_b)))
+
+
+def get_face_color(face):
+	face_colors = cmds.polyColorPerVertex(face, query=True, colorRGB=True)
+	if face_colors:
+		return [
+			sum(face_colors[0::3]) / len(face_colors[0::3]),
+			sum(face_colors[1::3]) / len(face_colors[1::3]),
+			sum(face_colors[2::3]) / len(face_colors[2::3]),
+		]
+	return None
+
+
+def continuous_selection(mesh, start_face, target_color, threshold_distance):
+	visited = set()
+	matching_faces = set()
+	face_queue = [start_face]
+
+	while face_queue:
+		current_face = face_queue.pop(0)
+
+		if current_face in visited:
+			continue
+
+		visited.add(current_face)
+
+		current_face_color = get_face_color(current_face)
+		if current_face_color and color_distance(current_face_color, target_color) <= threshold_distance:
+			matching_faces.add(current_face)
+
+			edges = cmds.polyListComponentConversion(current_face, toEdge=True)
+			edges = cmds.ls(edges, flatten=True)
+
+			adjacent_faces = cmds.polyListComponentConversion(edges, toFace=True)
+			adjacent_faces = cmds.ls(adjacent_faces, flatten=True)
+
+			for adj_face in adjacent_faces:
+				if adj_face not in visited:
+					face_queue.append(adj_face)
+
+	return list(matching_faces)
+
+
+def non_continuous_selection(mesh, target_color, threshold_distance):
+	matching_faces = []
+	all_faces = cmds.ls(f"{mesh}.f[*]", flatten=True)
+
+	for face in all_faces:
+		face_color = get_face_color(face)
+		if (
+			face_color
+			and color_distance(face_color, target_color) <= threshold_distance
+		):
+			matching_faces.append(face)
+
+	return matching_faces
+
+
 def show(*args):
 	"""Runs the command when clicked in the Maya menu."""
 	open_gui()
@@ -167,31 +225,54 @@ def open_gui():
 	global _last_threshold_value
 	global _color_picker
 	global _fill_frame
+	global _continuous_checkbox
 
 	if cmds.window("MagicWandForVertexColors", exists=True):
 		cmds.deleteUI("MagicWandForVertexColors")
 
-	window = cmds.window("MagicWandForVertexColors", title=MENU_ENTRY_LABEL, widthHeight=(1, 1), resizeToFitChildren=True)
+	window = cmds.window(
+		"MagicWandForVertexColors",
+		title=MENU_ENTRY_LABEL,
+		widthHeight=(1, 1),
+		resizeToFitChildren=True,
+	)
 	cmds.columnLayout(adjustableColumn=True)
 
 	_threshold_slider = cmds.floatSliderGrp(
-		label="Color Tolerance (%)", field=True, minValue=0, maxValue=100, fieldMinValue=0, fieldMaxValue=100, value=_last_threshold_value,
-		dragCommand=lambda x: selection_changed_callback())
+		label="Color Tolerance (%)",
+		field=True,
+		minValue=0,
+		maxValue=100,
+		fieldMinValue=0,
+		fieldMaxValue=100,
+		value=_last_threshold_value,
+		dragCommand=lambda x: selection_changed_callback(),
+	)
+
+	cmds.separator(style="in")
+ 
+	_continuous_checkbox = cmds.checkBox(
+		label="Continuous Selection", value=True, changeCommand=lambda x: selection_changed_callback()
+	)
 
 	cmds.separator(style="in")
 
 	_fill_frame = cmds.frameLayout(label="Fill Color", collapsable=True, collapse=True)
 	cmds.columnLayout(adjustableColumn=True, backgroundColor=[0.25, 0.25, 0.25])
-	_color_picker = cmds.colorSliderGrp(label="Fill Color", rgb=_fill_color, changeCommand=update_fill_color)
+	_color_picker = cmds.colorSliderGrp(
+		label="Fill Color", rgb=_fill_color, changeCommand=update_fill_color
+	)
 	cmds.button(label="Apply Fill", command=apply_fill_color)
 	cmds.button(label="Clear", command=clear_vertex_colors)
-	cmds.setParent('..')
-	cmds.setParent('..')
+	cmds.setParent("..")
+	cmds.setParent("..")
 
 	cmds.separator(style="in")
 
 	cmds.showWindow(window)
-	cmds.scriptJob(event=["SelectionChanged", selection_changed_callback], parent=window)
+	cmds.scriptJob(
+		event=["SelectionChanged", selection_changed_callback], parent=window
+	)
 
 
 def loadMenu():
@@ -204,7 +285,9 @@ def loadMenu():
 	if not cmds.menu(f"{MENU_PARENT}|{MENU_NAME}", exists=True):
 		cmds.menu(MENU_NAME, label=MENU_LABEL, parent=MENU_PARENT)
 
-	__menu_entry_name = cmds.menuItem(label=MENU_ENTRY_LABEL, command=show, parent=MENU_NAME)
+	__menu_entry_name = cmds.menuItem(
+		label=MENU_ENTRY_LABEL, command=show, parent=MENU_NAME
+	)
 
 
 def unloadMenuItem():
