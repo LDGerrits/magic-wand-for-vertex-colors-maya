@@ -1,4 +1,3 @@
-import maya.utils
 import maya.api.OpenMaya as om
 import maya.cmds as cmds
 import maya.mel as mel
@@ -278,6 +277,7 @@ def update_current_color_display(color_rgb):
 			  f"HSV: {hsv_rounded}"
 	)
 
+
 def set_fill_color_to_target(*args):
 	global _fill_color, _target_color, _color_picker
 
@@ -286,7 +286,8 @@ def set_fill_color_to_target(*args):
 
 		# Update the color picker UI to reflect the new fill color
 		if _color_picker and cmds.colorSliderGrp(_color_picker, query=True, exists=True):
-			cmds.colorSliderGrp(_color_picker, edit=True, rgbValue=_fill_color)
+			cmds.colorSliderGrp(_color_picker, edit=True, rgbValue=_fill_color, useDisplaySpace=True)
+
 
 def show(*args):
 	"""Runs the command when clicked in the Maya menu."""
@@ -329,19 +330,21 @@ def open_gui():
 
 	cmds.separator(style="in")
 
-	cmds.rowLayout(numberOfColumns=3, columnWidth3=(100, 150, 100), adjustableColumn=3)
-	cmds.button(label="Set Vertex\nColor", width=100, height=50, command=set_fill_color_to_target)
-	_current_color_display = cmds.canvas(rgbValue=DEFAULT_INACTIVE_COLOR, width=150, height=50)
+	cmds.rowLayout(numberOfColumns=2, columnWidth2=(100, 100), adjustableColumn=1)
+	_current_color_display = cmds.canvas(rgbValue=DEFAULT_INACTIVE_COLOR, width=100, height=75)
+	cmds.columnLayout(numberOfChildren=2, columnWidth=150, adjustableColumn=1)
 	_current_color_text = cmds.text(label="RGB (0-1): (1.0, 1.0, 1.0)\nRGB (0-255): (255, 255, 255)\nHSV: (0, 0, 1)", align='left')
+	cmds.button(label="Set Vertex Color", width=150, height=25, command=set_fill_color_to_target)
+	cmds.setParent('..')
 	cmds.setParent('..')
 
 	cmds.separator(style="in")
  
-	cmds.rowLayout(numberOfColumns=2, columnWidth2=(100, 50), adjustableColumn=2)
-	cmds.button(label="Apply Vertex Color", command=apply_fill_color, width=100)
+	cmds.rowLayout(numberOfColumns=2, columnWidth2=(100, 50), adjustableColumn=1)
 	_color_picker = cmds.colorSliderGrp(
-		rgb=_fill_color, changeCommand=fill_color_changed_callback, columnWidth=(1, 150)
+		rgb=_fill_color, changeCommand=fill_color_changed_callback, columnWidth2=(100, 25), useDisplaySpace=True
 	)
+	cmds.button(label="Apply Vertex Color", command=apply_fill_color, width=150)
 	cmds.setParent("..")
 
 	cmds.separator(style="in")
