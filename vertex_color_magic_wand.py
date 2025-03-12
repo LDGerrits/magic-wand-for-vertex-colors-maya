@@ -15,8 +15,10 @@ DEFAULT_THRESHOLD = 1
 MAX_RGB_DISTANCE = math.sqrt(3)
 DEFAULT_INACTIVE_COLOR = [0.0, 0.0, 0.0]
 
+
 def maya_useNewAPI():
 	pass
+
 
 class MagicWandUI:
 	def __init__(self, plugin):
@@ -37,44 +39,63 @@ class MagicWandUI:
 			"MagicWandForVertexColors",
 			title=MENU_ENTRY_LABEL,
 			widthHeight=(1, 1),
-			resizeToFitChildren=True
+			resizeToFitChildren=True,
 		)
 		cmds.columnLayout(adjustableColumn=True)
 
 		self.threshold_slider = cmds.floatSliderGrp(
-			label="Color Tolerance (%)", field=True, minValue=0, maxValue=100,
-			fieldMinValue=0, fieldMaxValue=100, value=self.plugin.last_threshold_value,
-			dragCommand=lambda x: self.plugin.slider_changed(), columnWidth=(1, 100)
+			label="Color Tolerance (%)",
+			field=True,
+			minValue=0,
+			maxValue=100,
+			fieldMinValue=0,
+			fieldMaxValue=100,
+			value=self.plugin.last_threshold_value,
+			dragCommand=lambda x: self.plugin.slider_changed(),
+			columnWidth=(1, 100),
 		)
 
 		cmds.separator(style="in")
 
 		cmds.rowLayout(numberOfColumns=2, columnWidth2=(100, 100), adjustableColumn=1)
-		self.current_color_display = cmds.canvas(rgbValue=DEFAULT_INACTIVE_COLOR, width=100, height=75)
+		self.current_color_display = cmds.canvas(
+			rgbValue=DEFAULT_INACTIVE_COLOR, width=100, height=75
+		)
 		cmds.columnLayout(numberOfChildren=2, columnWidth=150, adjustableColumn=1)
 		self.current_color_text = cmds.text(
 			label="RGB (0-1): (1.0, 1.0, 1.0)\nRGB (0-255): (255, 255, 255)\nHSV: (0, 0, 1)",
-			align='left'
+			align="left",
 		)
-		cmds.button(label="Set Vertex Color", width=150, height=25, command=self.plugin.set_fill_color_to_target)
-		cmds.setParent('..')
-		cmds.setParent('..')
+		cmds.button(
+			label="Set Vertex Color",
+			width=150,
+			height=25,
+			command=self.plugin.set_fill_color_to_target,
+		)
+		cmds.setParent("..")
+		cmds.setParent("..")
 
 		cmds.separator(style="in")
 
 		cmds.rowLayout(numberOfColumns=2, columnWidth2=(100, 50), adjustableColumn=1)
 		self.color_picker = cmds.colorSliderGrp(
-			rgb=self.plugin.fill_color, changeCommand=self.plugin.fill_color_changed,
-			columnWidth2=(100, 25), useDisplaySpace=True
+			rgb=self.plugin.fill_color,
+			changeCommand=self.plugin.fill_color_changed,
+			columnWidth2=(100, 25),
+			useDisplaySpace=True,
 		)
-		cmds.button(label="Apply Vertex Color", command=self.plugin.apply_fill_color, width=150)
+		cmds.button(
+			label="Apply Vertex Color", command=self.plugin.apply_fill_color, width=150
+		)
 		cmds.setParent("..")
 
 		cmds.separator(style="in")
 
 		self.continuous_checkbox = cmds.checkBox(
-			label="Contiguous Selection", value=True, align='middle',
-			changeCommand=lambda x: self.plugin.selection_changed()
+			label="Contiguous Selection",
+			value=True,
+			align="middle",
+			changeCommand=lambda x: self.plugin.selection_changed(),
 		)
 
 		cmds.separator(style="in")
@@ -82,7 +103,10 @@ class MagicWandUI:
 		cmds.button(label="Clear Vertex Data", command=self.plugin.clear_vertex_colors)
 
 		cmds.showWindow(self.window)
-		cmds.scriptJob(event=["SelectionChanged", self.plugin.selection_changed], parent=self.window)
+		cmds.scriptJob(
+			event=["SelectionChanged", self.plugin.selection_changed],
+			parent=self.window,
+		)
 
 	def update_current_color_display(self, color_rgb):
 		"""Updates the color display and text in the UI."""
@@ -93,11 +117,19 @@ class MagicWandUI:
 			cmds.canvas(self.current_color_display, edit=True, rgbValue=color_rgb)
 			rgb_255 = tuple(int(c * 255) for c in color_rgb)
 			hsv = colorsys.rgb_to_hsv(color_rgb[0], color_rgb[1], color_rgb[2])
-			hsv_rounded = (round(hsv[0] * 360, 2), round(hsv[1] * 100, 2), round(hsv[2] * 100, 2))
-			cmds.text(self.current_color_text, edit=True,
-					 label=f"RGB (0-1): {tuple(round(c, 2) for c in color_rgb)}\n"
-						   f"RGB (0-255): {rgb_255}\n"
-						   f"HSV: {hsv_rounded}")
+			hsv_rounded = (
+				round(hsv[0] * 360, 2),
+				round(hsv[1] * 100, 2),
+				round(hsv[2] * 100, 2),
+			)
+			cmds.text(
+				self.current_color_text,
+				edit=True,
+				label=f"RGB (0-1): {tuple(round(c, 2) for c in color_rgb)}\n"
+				f"RGB (0-255): {rgb_255}\n"
+				f"HSV: {hsv_rounded}",
+			)
+
 
 class MagicWandPlugin:
 	def __init__(self):
@@ -125,7 +157,7 @@ class MagicWandPlugin:
 		"""Callback for selection changes."""
 		try:
 			current_selection = cmds.ls(selection=True, flatten=True)
-			
+
 			if not current_selection:
 				self.initial_face = None
 				self.target_color = None
@@ -139,15 +171,19 @@ class MagicWandPlugin:
 			if new_faces:
 				selected_face = list(new_faces)[0]
 				self.display_message(f"Newest Selected Face: {selected_face}")
-				
+
 				if shift_pressed:
 					self.stored_selected_faces.update(current_selection)
 				self.initial_face = selected_face
 				self.target_color = self.get_face_color(self.initial_face)
 				self.ui.update_current_color_display(self.target_color)
 
-			if self.ui.threshold_slider and cmds.floatSliderGrp(self.ui.threshold_slider, exists=True):
-				self.last_threshold_value = cmds.floatSliderGrp(self.ui.threshold_slider, query=True, value=True)
+			if self.ui.threshold_slider and cmds.floatSliderGrp(
+				self.ui.threshold_slider, exists=True
+			):
+				self.last_threshold_value = cmds.floatSliderGrp(
+					self.ui.threshold_slider, query=True, value=True
+				)
 
 			self.select_similar_colored_faces(self.last_threshold_value, shift_pressed)
 		except Exception as e:
@@ -155,9 +191,15 @@ class MagicWandPlugin:
 
 	def slider_changed(self, *args):
 		"""Callback for slider changes."""
-		if self.ui.threshold_slider and cmds.floatSliderGrp(self.ui.threshold_slider, exists=True):
-			self.last_threshold_value = cmds.floatSliderGrp(self.ui.threshold_slider, query=True, value=True)
-		self.select_similar_colored_faces(self.last_threshold_value, len(self.stored_selected_faces) > 0)
+		if self.ui.threshold_slider and cmds.floatSliderGrp(
+			self.ui.threshold_slider, exists=True
+		):
+			self.last_threshold_value = cmds.floatSliderGrp(
+				self.ui.threshold_slider, query=True, value=True
+			)
+		self.select_similar_colored_faces(
+			self.last_threshold_value, len(self.stored_selected_faces) > 0
+		)
 
 	def apply_fill_color(self, *args):
 		"""Applies the selected fill color to all selected vertices."""
@@ -167,7 +209,9 @@ class MagicWandPlugin:
 			return
 		try:
 			for vertex in selection:
-				cmds.polyColorPerVertex(vertex, colorRGB=self.fill_color, colorDisplayOption=True)
+				cmds.polyColorPerVertex(
+					vertex, colorRGB=self.fill_color, colorDisplayOption=True
+				)
 			if self.initial_face:
 				self.target_color = self.get_face_color(self.initial_face)
 				self.ui.update_current_color_display(self.target_color)
@@ -177,13 +221,17 @@ class MagicWandPlugin:
 	def fill_color_changed(self, *args):
 		"""Updates fill color from UI."""
 		if self.ui.color_picker:
-			self.fill_color = cmds.colorSliderGrp(self.ui.color_picker, query=True, rgbValue=True)
+			self.fill_color = cmds.colorSliderGrp(
+				self.ui.color_picker, query=True, rgbValue=True
+			)
 
 	def clear_vertex_colors(self, *args):
 		"""Removes vertex colors from selected faces."""
 		selection = cmds.ls(selection=True, flatten=True)
 		if not selection:
-			self.display_message("Please, select faces or vertices to clear vertex colors.", "info")
+			self.display_message(
+				"Please, select faces or vertices to clear vertex colors.", "info"
+			)
 			return
 		for face in selection:
 			try:
@@ -191,7 +239,9 @@ class MagicWandPlugin:
 			except Exception as e:
 				continue
 
-	def select_similar_colored_faces(self, threshold=DEFAULT_THRESHOLD, shift_pressed=False):
+	def select_similar_colored_faces(
+		self, threshold=DEFAULT_THRESHOLD, shift_pressed=False
+	):
 		"""Selects faces with similar vertex colors."""
 		try:
 			selection = cmds.ls(selection=True, flatten=True)
@@ -201,16 +251,26 @@ class MagicWandPlugin:
 
 			mesh = self.initial_face.split(".")[0]
 			threshold_distance = (threshold / 100.0) * MAX_RGB_DISTANCE
-			continuous = cmds.checkBox(self.ui.continuous_checkbox, query=True, value=True)
+			continuous = cmds.checkBox(
+				self.ui.continuous_checkbox, query=True, value=True
+			)
 
-			matching_faces = (self.continuous_selection(mesh, self.initial_face, self.target_color, threshold_distance)
-							if continuous else
-							self.non_continuous_selection(mesh, self.target_color, threshold_distance))
+			matching_faces = (
+				self.continuous_selection(
+					mesh, self.initial_face, self.target_color, threshold_distance
+				)
+				if continuous
+				else self.non_continuous_selection(
+					mesh, self.target_color, threshold_distance
+				)
+			)
 
 			if shift_pressed:
 				self.stored_selected_faces.update(selection)
 				new_selection = set(matching_faces).union(
-					self.stored_selected_faces - set(cmds.ls(f"{mesh}.f[*]", flatten=True)))
+					self.stored_selected_faces
+					- set(cmds.ls(f"{mesh}.f[*]", flatten=True))
+				)
 			else:
 				self.stored_selected_faces.clear()
 				new_selection = set(matching_faces)
@@ -251,7 +311,11 @@ class MagicWandPlugin:
 				continue
 			visited.add(current_face)
 			current_face_color = self.get_face_color(current_face)
-			if current_face_color and self.color_distance(current_face_color, target_color) <= threshold_distance:
+			if (
+				current_face_color
+				and self.color_distance(current_face_color, target_color)
+				<= threshold_distance
+			):
 				matching_faces.add(current_face)
 				edges = cmds.polyListComponentConversion(current_face, toEdge=True)
 				edges = cmds.ls(edges, flatten=True)
@@ -267,15 +331,25 @@ class MagicWandPlugin:
 		all_faces = cmds.ls(f"{mesh}.f[*]", flatten=True)
 		for face in all_faces:
 			face_color = self.get_face_color(face)
-			if face_color and self.color_distance(face_color, target_color) <= threshold_distance:
+			if (
+				face_color
+				and self.color_distance(face_color, target_color) <= threshold_distance
+			):
 				matching_faces.append(face)
 		return matching_faces
 
 	def set_fill_color_to_target(self, *args):
 		if self.target_color:
 			self.fill_color = self.target_color
-			if self.ui.color_picker and cmds.colorSliderGrp(self.ui.color_picker, query=True, exists=True):
-				cmds.colorSliderGrp(self.ui.color_picker, edit=True, rgbValue=self.fill_color, useDisplaySpace=True)
+			if self.ui.color_picker and cmds.colorSliderGrp(
+				self.ui.color_picker, query=True, exists=True
+			):
+				cmds.colorSliderGrp(
+					self.ui.color_picker,
+					edit=True,
+					rgbValue=self.fill_color,
+					useDisplaySpace=True,
+				)
 
 	def show(self, *args):
 		self.ui.open_gui()
@@ -286,7 +360,11 @@ class MagicWandPlugin:
 		if not cmds.menu(f"{MENU_PARENT}|{MENU_NAME}", exists=True):
 			cmds.menu(MENU_NAME, label=MENU_LABEL, parent=MENU_PARENT)
 		self.menu_entry_name = cmds.menuItem(
-			label=MENU_ENTRY_LABEL, command=self.show, parent=MENU_NAME, image=IMAGE_ICON_NAME)
+			label=MENU_ENTRY_LABEL,
+			command=self.show,
+			parent=MENU_NAME,
+			image=IMAGE_ICON_NAME,
+		)
 
 	def unload_menu(self):
 		if cmds.menu(f"{MENU_PARENT}|{MENU_NAME}", exists=True):
@@ -299,12 +377,15 @@ class MagicWandPlugin:
 		self.initial_face = None
 		self.stored_selected_faces.clear()
 
+
 # Global instance
 plugin_instance = MagicWandPlugin()
+
 
 def initializePlugin(plugin):
 	plugin_instance.load_menu()
 	om.MGlobal.displayInfo(f"{PLUGIN_NAME} plugin loaded.")
+
 
 def uninitializePlugin(plugin):
 	plugin_instance.unload_menu()
