@@ -168,7 +168,6 @@ class MagicWandPlugin:
 			new_faces = set(current_selection) - self.stored_selected_faces
 			multi_select_mode = cmds.getModifiers() & 1
    
-			# Update threshold value from slider
 			if self.ui.threshold_slider and cmds.floatSliderGrp(self.ui.threshold_slider, exists=True):
 				self.last_threshold_value = cmds.floatSliderGrp(self.ui.threshold_slider, query=True, value=True)
 
@@ -196,6 +195,8 @@ class MagicWandPlugin:
 						self.initial_face = selected_face
 						self.target_color = self.get_face_color(self.initial_face)
 						self.ui.update_current_color_display(self.target_color)
+					else:
+						self.stored_selected_faces.clear()
 
 			self.select_similar_colored_faces(self.last_threshold_value, multi_select_mode)
 		except Exception as e:
@@ -282,8 +283,8 @@ class MagicWandPlugin:
 				new_selection = self.stored_selected_faces.union(matching_faces)
 				self.stored_selected_faces.update(new_selection)
 			else:
+				self.stored_selected_faces.clear()
 				new_selection = set(matching_faces)
-				self.stored_selected_faces.update(new_selection)
 
 			if new_selection:
 				current_selection = set(cmds.ls(selection=True, flatten=True))
