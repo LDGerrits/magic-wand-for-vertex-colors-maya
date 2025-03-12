@@ -49,50 +49,54 @@ def display_message(message, level="info"):
 
 def selection_changed_callback(*args):
 	"""Callback function that runs whenever the selection changes."""
-	global _threshold_slider, _last_threshold_value, _target_color, _initial_face, _stored_selected_faces
+	try:
+		global _threshold_slider, _last_threshold_value, _target_color, _initial_face, _stored_selected_faces
 
-	# om.MGlobal.displayInfo("Selection changed")
- 
-	current_selection = cmds.ls(selection=True, flatten=True)
+		# om.MGlobal.displayInfo("Selection changed")
+	
+		current_selection = cmds.ls(selection=True, flatten=True)
 
-	# Case 1: Selection is cleared (reset variables)
-	if not current_selection:
-		_initial_face = None
-		_target_color = None
-		_stored_selected_faces.clear()
-		update_current_color_display(None)  # Clear UI
+		# Case 1: Selection is cleared (reset variables)
+		if not current_selection:
+			_initial_face = None
+			_target_color = None
+			_stored_selected_faces.clear()
+			update_current_color_display(None)  # Clear UI
+			return
+
+		# Find the newest selected face
+		new_faces = set(current_selection) - _stored_selected_faces  # Faces in current_selection but NOT in _stored_selected_faces
+
+		# Detect if Shift is held (multi-selection mode)
+		shift_pressed = cmds.getModifiers() & 1  # Shift key = 1
+
+		# Case 2: New selection
+		# user_selected = _initial_face not in current_selection
+		if new_faces and len(new_faces)>0: # and user_selected:
+			selected_face = list(new_faces)[0]  # Pick one of the newly added faces
+			om.MGlobal.displayInfo(f"Newest Selected Face: {selected_face}")
+
+			if shift_pressed:
+				# om.MGlobal.displayInfo("Multi-selection mode enabled (Shift held).")
+				_stored_selected_faces.update(current_selection)  # Store all selected faces
+			# else:
+			# 	om.MGlobal.displayInfo("Single-selection mode.")
+			# 	_stored_selected_faces.clear()  # Reset stored selections
+
+			# Update _initial_face & _target_color
+			_initial_face = selected_face
+			_target_color = get_face_color(_initial_face)
+			update_current_color_display(_target_color)
+
+		# Case 3: User moves the slider, but selection remains
+		if _threshold_slider and cmds.floatSliderGrp(_threshold_slider, exists=True):
+			threshold_value = cmds.floatSliderGrp(_threshold_slider, query=True, value=True)
+			_last_threshold_value = threshold_value
+
+		select_similar_colored_faces(threshold_value, shift_pressed)
+	
+	except Exception as e:
 		return
-
-	# Find the newest selected face
-	new_faces = set(current_selection) - _stored_selected_faces  # Faces in current_selection but NOT in _stored_selected_faces
-
-	# Detect if Shift is held (multi-selection mode)
-	shift_pressed = cmds.getModifiers() & 1  # Shift key = 1
-
-	# Case 2: New selection
-	# user_selected = _initial_face not in current_selection
-	if new_faces: # and user_selected:
-		selected_face = list(new_faces)[0]  # Pick one of the newly added faces
-		om.MGlobal.displayInfo(f"Newest Selected Face: {selected_face}")
-
-		if shift_pressed:
-			om.MGlobal.displayInfo("Multi-selection mode enabled (Shift held).")
-			_stored_selected_faces.update(current_selection)  # Store all selected faces
-		else:
-			om.MGlobal.displayInfo("Single-selection mode.")
-			_stored_selected_faces.clear()  # Reset stored selections
-
-		# Update _initial_face & _target_color
-		_initial_face = selected_face
-		_target_color = get_face_color(_initial_face)
-		update_current_color_display(_target_color)
-
-	# Case 3: User moves the slider, but selection remains
-	if _threshold_slider and cmds.floatSliderGrp(_threshold_slider, exists=True):
-		threshold_value = cmds.floatSliderGrp(_threshold_slider, query=True, value=True)
-		_last_threshold_value = threshold_value
-
-	select_similar_colored_faces(threshold_value, True)
 
 
 def slider_changed_callback(*args):
@@ -101,7 +105,7 @@ def slider_changed_callback(*args):
 		threshold_value = cmds.floatSliderGrp(_threshold_slider, query=True, value=True)
 		_last_threshold_value = threshold_value
 
-	om.MGlobal.displayInfo(f"{len(_stored_selected_faces)}")
+	# om.MGlobal.displayInfo(f"{len(_stored_selected_faces)}")
 	select_similar_colored_faces(threshold_value, len(_stored_selected_faces) > 0)
 	
 	
@@ -173,18 +177,25 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD, shift_pressed=Fals
 				mesh, _target_color, threshold_distance
 			)
 		
+		# Handle selection based on Shift key
 		if shift_pressed:
-			matching_faces = set(matching_faces).union(_stored_selected_faces)  # Merge selections
-			_stored_selected_faces.update(matching_faces)  # Update stored selections
+			# In multi-selection mode, recompute entirely but preserve manual additions
+			_stored_selected_faces.update(selection)  # Keep manually selected faces
+			new_selection = set(matching_faces).union(
+				_stored_selected_faces - set(cmds.ls(f"{mesh}.f[*]", flatten=True))
+			)  # Only keep stored faces that are still valid
 		else:
-			_stored_selected_faces.clear()  # Reset stored selections
+			# In single-selection mode, reset and use only the new matches
+			_stored_selected_faces.clear()
+			new_selection = set(matching_faces)
+
+		_stored_selected_faces.update(new_selection)  # Update stored selections
 
 		# Select matching faces
-		if matching_faces:
-			# Only update selection if it has changed to prevent recursive calls
-			current_selection = cmds.ls(selection=True, flatten=True)
-			if set(current_selection) != set(matching_faces):
-				cmds.select(matching_faces, replace=True)
+		if new_selection:
+			current_selection = set(cmds.ls(selection=True, flatten=True))
+			if current_selection != new_selection:
+				cmds.select(list(new_selection), replace=True)
 		else:
 			display_message("No matching faces found.", "info")
 
