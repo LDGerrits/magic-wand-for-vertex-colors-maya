@@ -167,22 +167,35 @@ class MagicWandPlugin:
 
 			new_faces = set(current_selection) - self.stored_selected_faces
 			multi_select_mode = cmds.getModifiers() & 1
+   
+			# Update threshold value from slider
+			if self.ui.threshold_slider and cmds.floatSliderGrp(self.ui.threshold_slider, exists=True):
+				self.last_threshold_value = cmds.floatSliderGrp(self.ui.threshold_slider, query=True, value=True)
+
+			threshold_distance = (self.last_threshold_value / 100.0) * MAX_RGB_DISTANCE
+   
+			# Check if new_faces are all within threshold of target_color
+			is_threshold_change = False
+			if self.target_color and new_faces:
+				is_threshold_change = all(
+					self.color_distance(self.get_face_color(face), self.target_color) <= threshold_distance
+					for face in new_faces if self.get_face_color(face) is not None
+				)
 
 			if new_faces:
 				selected_face = list(new_faces)[0]
 
 				if multi_select_mode:
 					self.stored_selected_faces.update(current_selection)
-				self.initial_face = selected_face
-				self.target_color = self.get_face_color(self.initial_face)
-				self.ui.update_current_color_display(self.target_color)
-
-			if self.ui.threshold_slider and cmds.floatSliderGrp(
-				self.ui.threshold_slider, exists=True
-			):
-				self.last_threshold_value = cmds.floatSliderGrp(
-					self.ui.threshold_slider, query=True, value=True
-				)
+					self.initial_face = selected_face
+					self.target_color = self.get_face_color(self.initial_face)
+					self.ui.update_current_color_display(self.target_color)
+				else:
+					if not is_threshold_change:
+						self.stored_selected_faces.clear()
+						self.initial_face = selected_face
+						self.target_color = self.get_face_color(self.initial_face)
+						self.ui.update_current_color_display(self.target_color)
 
 			self.select_similar_colored_faces(self.last_threshold_value, multi_select_mode)
 		except Exception as e:
@@ -267,11 +280,11 @@ class MagicWandPlugin:
 			if multi_select_mode:
 				self.stored_selected_faces.update(selection)
 				new_selection = self.stored_selected_faces.union(matching_faces)
+				self.stored_selected_faces.update(new_selection)
 			else:
-				self.stored_selected_faces.clear()
 				new_selection = set(matching_faces)
+				self.stored_selected_faces.update(new_selection)
 
-			self.stored_selected_faces.update(new_selection)
 			if new_selection:
 				current_selection = set(cmds.ls(selection=True, flatten=True))
 				if current_selection != new_selection:
