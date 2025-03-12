@@ -1,3 +1,4 @@
+import maya.utils
 import maya.api.OpenMaya as om
 import maya.cmds as cmds
 import maya.mel as mel
@@ -26,6 +27,7 @@ _target_color = None  # Persistently stores the initial selected face color
 _initial_face = None  # Stores the initially selected face
 _current_color_display = None  # UI element for showing current selected color
 _current_color_text = None  # Text field for RGB/HSV values
+_stored_selected_faces = set() # Holds previously selected faces for multi-selection
 
 
 def maya_useNewAPI():
@@ -47,36 +49,62 @@ def display_message(message, level="info"):
 
 def selection_changed_callback(*args):
 	"""Callback function that runs whenever the selection changes."""
-	global _threshold_slider, _last_threshold_value, _target_color, _initial_face
+	global _threshold_slider, _last_threshold_value, _target_color, _initial_face, _stored_selected_faces
 
+	om.MGlobal.displayInfo("Selection changed")
+ 
 	current_selection = cmds.ls(selection=True, flatten=True)
 
 	# Case 1: Selection is cleared (reset variables)
 	if not current_selection:
-		om.MGlobal.displayInfo("SELECTION CLEARED")
 		_initial_face = None
 		_target_color = None
+		_stored_selected_faces.clear()
 		update_current_color_display(None)  # Clear UI
 		return
 
-	# Case 2: The current `_initial_face` is NO LONGER in the selection -> update it
-	if _initial_face not in current_selection:
-		# A new face is explicitly selected by the user
-		if ".f[" in current_selection[0]:
-			om.MGlobal.displayInfo("NEW FACE SELECTED")
-			selected_face = current_selection[0]
-			_initial_face = selected_face
-			_target_color = get_face_color(_initial_face)
-			update_current_color_display(_target_color)
+	# Find the newest selected face
+	new_faces = set(current_selection) - _stored_selected_faces  # Faces in current_selection but NOT in _stored_selected_faces
+
+	# Detect if Shift is held (multi-selection mode)
+	shift_pressed = cmds.getModifiers() & 1  # Shift key = 1
+
+	# Case 2: New selection
+	# user_selected = _initial_face not in current_selection
+	if new_faces: # and user_selected:
+		selected_face = list(new_faces)[0]  # Pick one of the newly added faces
+		om.MGlobal.displayInfo(f"Newest Selected Face: {selected_face}")
+
+		if shift_pressed:
+			om.MGlobal.displayInfo("Multi-selection mode enabled (Shift held).")
+			_stored_selected_faces.update(current_selection)  # Store all selected faces
+		else:
+			om.MGlobal.displayInfo("Single-selection mode.")
+			_stored_selected_faces.clear()  # Reset stored selections
+
+		# Update _initial_face & _target_color
+		_initial_face = selected_face
+		_target_color = get_face_color(_initial_face)
+		update_current_color_display(_target_color)
 
 	# Case 3: User moves the slider, but selection remains
 	if _threshold_slider and cmds.floatSliderGrp(_threshold_slider, exists=True):
 		threshold_value = cmds.floatSliderGrp(_threshold_slider, query=True, value=True)
 		_last_threshold_value = threshold_value
 
-	select_similar_colored_faces(threshold_value)
+	select_similar_colored_faces(threshold_value, True)
 
 
+def slider_changed_callback(*args):
+	global _threshold_slider, _last_threshold_value, _stored_selected_faces
+	if _threshold_slider and cmds.floatSliderGrp(_threshold_slider, exists=True):
+		threshold_value = cmds.floatSliderGrp(_threshold_slider, query=True, value=True)
+		_last_threshold_value = threshold_value
+
+	om.MGlobal.displayInfo(f"{len(_stored_selected_faces)}")
+	select_similar_colored_faces(threshold_value, len(_stored_selected_faces) > 0)
+	
+	
 def apply_fill_color(*args):
 	"""Applies the selected fill color to all selected vertices."""
 	global _fill_color
@@ -119,10 +147,10 @@ def clear_vertex_colors(*args):
 			continue
 
 
-def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
+def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD, shift_pressed=False):
 	"""Selects faces on a mesh that have similar vertex colors to the currently selected face."""
 	try:
-		global _continuous_checkbox, _initial_face, _target_color
+		global _continuous_checkbox, _initial_face, _target_color, _stored_selected_faces
 
 		selection = cmds.ls(selection=True, flatten=True)
 		if not selection or not _target_color:
@@ -144,6 +172,12 @@ def select_similar_colored_faces(threshold=DEFAULT_THRESHOLD):
 			matching_faces = non_continuous_selection(
 				mesh, _target_color, threshold_distance
 			)
+		
+		if shift_pressed:
+			matching_faces = set(matching_faces).union(_stored_selected_faces)  # Merge selections
+			_stored_selected_faces.update(matching_faces)  # Update stored selections
+		else:
+			_stored_selected_faces.clear()  # Reset stored selections
 
 		# Select matching faces
 		if matching_faces:
@@ -289,36 +323,36 @@ def open_gui():
 		fieldMinValue=0,
 		fieldMaxValue=100,
 		value=_last_threshold_value,
-		dragCommand=lambda x: selection_changed_callback(),
+		dragCommand=lambda x: slider_changed_callback(),
 		columnWidth=(1, 100)
 	)
 
 	cmds.separator(style="in")
 
-	cmds.rowLayout(numberOfColumns=3, columnWidth3=(50, 50, 50), adjustableColumn=2)
-	cmds.button(label="Set Fill\nColor", width=50, height=50, command=set_fill_color_to_target)
+	cmds.rowLayout(numberOfColumns=3, columnWidth3=(100, 150, 100), adjustableColumn=3)
+	cmds.button(label="Set Vertex\nColor", width=100, height=50, command=set_fill_color_to_target)
 	_current_color_display = cmds.canvas(rgbValue=DEFAULT_INACTIVE_COLOR, width=150, height=50)
 	_current_color_text = cmds.text(label="RGB (0-1): (1.0, 1.0, 1.0)\nRGB (0-255): (255, 255, 255)\nHSV: (0, 0, 1)", align='left')
 	cmds.setParent('..')
 
 	cmds.separator(style="in")
  
-	cmds.rowLayout(numberOfColumns=2, columnWidth2=(100, 100), adjustableColumn=2)
-	cmds.button(label="Apply Fill Color", command=apply_fill_color, width=100)
+	cmds.rowLayout(numberOfColumns=2, columnWidth2=(100, 50), adjustableColumn=2)
+	cmds.button(label="Apply Vertex Color", command=apply_fill_color, width=100)
 	_color_picker = cmds.colorSliderGrp(
-		rgb=_fill_color, changeCommand=fill_color_changed_callback, columnWidth=(1, 100)
+		rgb=_fill_color, changeCommand=fill_color_changed_callback, columnWidth=(1, 150)
 	)
 	cmds.setParent("..")
 
 	cmds.separator(style="in")
  
 	_continuous_checkbox = cmds.checkBox(
-		label="Continuous Selection", value=True, align='middle', changeCommand=lambda x: selection_changed_callback()
+		label="Contiguous Selection", value=True, align='middle', changeCommand=lambda x: selection_changed_callback()
 	)
 
 	cmds.separator(style="in")
 
-	cmds.button(label="Clear Color", command=clear_vertex_colors)
+	cmds.button(label="Clear Vertex Data", command=clear_vertex_colors)
 
 	cmds.showWindow(window)
 	cmds.scriptJob(
@@ -351,6 +385,13 @@ def unloadMenuItem():
 
 		if not cmds.menu(menu_long_name, query=True, itemArray=True):
 			cmds.deleteUI(menu_long_name, menu=True)
+   
+	global _target_color, _initial_face, _current_color_text, _stored_selected_faces
+
+	_target_color = None
+	_initial_face = None
+	_current_color_text = None
+	_stored_selected_faces.clear()
 
 
 def initializePlugin(plugin):
