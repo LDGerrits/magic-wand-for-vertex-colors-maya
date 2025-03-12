@@ -42,6 +42,70 @@ system($pipInstallCommand);  // Execute the pip install command
 
 
 
+// Define your icon name (use the same name you'll reference in the Python menu code)
+string $iconFileName = "magic_wand_icon.png";
+
+// Build source path for icon
+string $iconSourceFilePath = $melScriptDir + "/magic_wand_icon.png";
+
+// Get the XBMLANGPATH environment variable (semicolon-delimited)
+string $xbmLangPath = `getenv "XBMLANGPATH"`;
+string $xbmLangPaths[] = stringToStringArray($xbmLangPath, ";");
+
+// We will look for the first path containing "icons"
+string $iconsFolderPath = "";
+for ( $path in $xbmLangPaths ) {
+    if (`gmatch $path "*icons*"`) {
+        $iconsFolderPath = $path;
+        break;
+    }
+}
+
+// If we didn't find a path with icons, handle it here
+if ($iconsFolderPath == "") {
+    // Optionally, fall back to the default user icons path:
+    //    string $mayaVersion = `about -version`;
+    //    $iconsFolderPath = `getenv "MAYA_APP_DIR"` + "/" + $mayaVersion + "/icons/";
+    error("No valid prefs/icons path found in XBMLANGPATH.");
+}
+
+// Ensure the icons folder exists
+if (!`filetest -d $iconsFolderPath`) {
+    sysFile -makeDir $iconsFolderPath;
+    print("Icons folder created: " + $iconsFolderPath + "\n");
+} else {
+    print("Icons folder already exists: " + $iconsFolderPath + "\n");
+}
+
+// Construct the destination path for the icon
+// Make sure to include a slash if $iconsFolderPath does not already end with one
+string $slash = "/";
+if (`gmatch $iconsFolderPath "*/*"`) {
+    // The path might already have a slash at the end, so handle carefully if needed
+    // For simplicity, just ensure we add exactly one slash
+    if (!`gmatch $iconsFolderPath "*/*/"`) {
+        $iconsFolderPath += $slash;
+    }
+} else {
+    $iconsFolderPath += $slash;
+}
+
+string $iconDestinationFilePath = $iconsFolderPath + $iconFileName;
+
+// Copy the icon file
+print("Copying icon from: " + $iconSourceFilePath + " to: " + $iconDestinationFilePath + "\n");
+python("import shutil; shutil.copyfile(r'" + $iconSourceFilePath + "', r'" + $iconDestinationFilePath + "')");
+
+// Confirm the icon was copied
+if (!`filetest -f $iconDestinationFilePath`) {
+    error("Icon file did not copy to: " + $iconDestinationFilePath);
+}
+print("Icon file copied to: " + $iconDestinationFilePath + "\n");
+
+
+
+
+
 // Define the plugin file path relative to the MEL script's location
 string $pluginSourceFilePath = $melScriptDir + "/" + $PLUGIN_NAME;
 print("Plugin source path: " + $pluginSourceFilePath + "\n");
