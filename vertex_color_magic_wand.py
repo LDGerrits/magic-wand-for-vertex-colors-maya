@@ -166,13 +166,12 @@ class MagicWandPlugin:
 				return
 
 			new_faces = set(current_selection) - self.stored_selected_faces
-			shift_pressed = cmds.getModifiers() & 1
+			multi_select_mode = cmds.getModifiers() & 1
 
 			if new_faces:
 				selected_face = list(new_faces)[0]
-				self.display_message(f"Newest Selected Face: {selected_face}")
 
-				if shift_pressed:
+				if multi_select_mode:
 					self.stored_selected_faces.update(current_selection)
 				self.initial_face = selected_face
 				self.target_color = self.get_face_color(self.initial_face)
@@ -185,7 +184,7 @@ class MagicWandPlugin:
 					self.ui.threshold_slider, query=True, value=True
 				)
 
-			self.select_similar_colored_faces(self.last_threshold_value, shift_pressed)
+			self.select_similar_colored_faces(self.last_threshold_value, multi_select_mode)
 		except Exception as e:
 			return
 
@@ -240,7 +239,7 @@ class MagicWandPlugin:
 				continue
 
 	def select_similar_colored_faces(
-		self, threshold=DEFAULT_THRESHOLD, shift_pressed=False
+		self, threshold=DEFAULT_THRESHOLD, multi_select_mode=False
 	):
 		"""Selects faces with similar vertex colors."""
 		try:
@@ -265,12 +264,9 @@ class MagicWandPlugin:
 				)
 			)
 
-			if shift_pressed:
+			if multi_select_mode:
 				self.stored_selected_faces.update(selection)
-				new_selection = set(matching_faces).union(
-					self.stored_selected_faces
-					- set(cmds.ls(f"{mesh}.f[*]", flatten=True))
-				)
+				new_selection = self.stored_selected_faces.union(matching_faces)
 			else:
 				self.stored_selected_faces.clear()
 				new_selection = set(matching_faces)
