@@ -10,6 +10,7 @@ MENU_NAME = "ToolsMenu"
 MENU_LABEL = "Tools"
 MENU_ENTRY_LABEL = "Magic Wand for Vertex Colors"
 MENU_PARENT = "MayaWindow"
+IMAGE_ICON_NAME = "magic_wand_icon.png"
 DEFAULT_THRESHOLD = 1
 MAX_RGB_DISTANCE = math.sqrt(3)  # max distance possible in RGB
 DEFAULT_INACTIVE_COLOR = [0.0, 0.0, 0.0]
@@ -50,7 +51,7 @@ def selection_changed_callback(*args):
 	"""Callback function that runs whenever the selection changes."""
 	global _threshold_slider, _last_threshold_value, _target_color, _initial_face, _stored_selected_faces
 
-	om.MGlobal.displayInfo("Selection changed")
+	# om.MGlobal.displayInfo("Selection changed")
  
 	current_selection = cmds.ls(selection=True, flatten=True)
 
@@ -374,7 +375,7 @@ def loadMenu():
 		cmds.menu(MENU_NAME, label=MENU_LABEL, parent=MENU_PARENT)
 
 	__menu_entry_name = cmds.menuItem(
-		label=MENU_ENTRY_LABEL, command=show, parent=MENU_NAME
+		label=MENU_ENTRY_LABEL, command=show, parent=MENU_NAME, image=IMAGE_ICON_NAME
 	)
 
 
