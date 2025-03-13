@@ -30,8 +30,6 @@ class MagicWandUI:
 		self.current_color_text = None
 		self.continuous_checkbox = None
 		self.script_job_id = None
-		self.undo_job_id = None
-		self.redo_job_id = None
 
 	def open_gui(self):
 		"""Creates and displays the GUI."""
@@ -111,14 +109,6 @@ class MagicWandUI:
 			event=["SelectionChanged", lambda: self.plugin.selection_changed()],
 			parent=self.window
 		)
-		self.undo_job_id = cmds.scriptJob(
-			event=["Undo", lambda: self.plugin.start_undo_redo()],
-			parent=self.window
-		)
-		self.redo_job_id = cmds.scriptJob(
-			event=["Redo", lambda: self.plugin.start_undo_redo()],
-			parent=self.window
-		)
 
 	def update_current_color_display(self, color_rgb):
 		"""Updates the color display and text in the UI."""
@@ -143,10 +133,9 @@ class MagicWandUI:
 			)
 
 	def cleanup(self):
-		for job_id in [self.script_job_id, self.undo_job_id, self.redo_job_id]:
+		for job_id in [self.script_job_id]:
 			if job_id is not None and cmds.scriptJob(exists=job_id):
 				cmds.scriptJob(kill=job_id)
-		self.is_processing_undo = False
 
 class MagicWandPlugin:
 	def __init__(self):
@@ -157,29 +146,8 @@ class MagicWandPlugin:
 		self.target_color = None
 		self.initial_face = None
 		self.stored_selected_faces = set()
-		self.is_processing_undo = False
 		self.previous_selection = set()
 		self.ui = MagicWandUI(self)  # Initialize UI with reference to this plugin
-
-	def set_undo_state(self, state):
-		self.is_processing_undo = state
-
-	def start_undo_redo(self):
-		"""Called when Undo or Redo starts."""
-		self.is_processing_undo = True
-		if self.ui.script_job_id and cmds.scriptJob(exists=self.ui.script_job_id):
-			cmds.scriptJob(kill=self.ui.script_job_id)  # Temporarily disable selection job
-		cmds.evalDeferred(lambda: self.end_undo_redo(), lowestPriority=True)
-
-	def end_undo_redo(self):
-		"""Reset the undo state after the operation completes."""
-		# Re-create the selection changed script job
-		if not self.ui.script_job_id or not cmds.scriptJob(exists=self.ui.script_job_id):
-			self.ui.script_job_id = cmds.scriptJob(
-				event=["SelectionChanged", lambda: self.selection_changed()],
-				parent=self.ui.window
-			)
-		self.is_processing_undo = False
 
 	def display_message(self, message, level="info"):
 		"""Displays messages only if they are different from the last one."""
@@ -195,9 +163,6 @@ class MagicWandPlugin:
 	def selection_changed(self, *args):
 		"""Callback for selection changes."""
 		try:
-			if self.is_processing_undo:
-				return
-		
 			current_selection = set(cmds.ls(selection=True, flatten=True))
 
 			if self.previous_selection == current_selection or current_selection == self.stored_selected_faces:
@@ -282,7 +247,6 @@ class MagicWandPlugin:
 
 		cmds.undoInfo(openChunk=True)
 		try:
-			self.is_processing_undo = True  # Prevent selection_changed during undo
 			for vertex in selection:
 				cmds.polyColorPerVertex(
 					vertex, colorRGB=self.fill_color, colorDisplayOption=True
@@ -293,7 +257,6 @@ class MagicWandPlugin:
 		except Exception as e:
 			self.display_message(f"Error applying vertex colors: {e}", "error")
 		finally:
-			self.is_processing_undo = False
 			cmds.undoInfo(closeChunk=True)
 
 	def fill_color_changed(self, *args):
@@ -311,13 +274,11 @@ class MagicWandPlugin:
 			return
 		cmds.undoInfo(openChunk=True)
 		try:
-			self.is_processing_undo = True
 			for face in selection:
 				cmds.polyColorPerVertex(face, remove=True)
 		except Exception as e:
 			self.display_message(f"Error clearing vertex colors: {e}", "error")
 		finally:
-			self.is_processing_undo = False
 			cmds.undoInfo(closeChunk=True)
 
 	def select_similar_colored_faces(
