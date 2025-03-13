@@ -4,7 +4,6 @@ import maya.mel as mel
 import math
 import colorsys
 
-# Plugin constants
 PLUGIN_NAME = "Magic Wand for Vertex Colors"
 MENU_NAME = "ToolsMenu"
 MENU_LABEL = "Tools"
@@ -22,7 +21,7 @@ def maya_useNewAPI():
 
 class MagicWandUI:
 	def __init__(self, plugin):
-		self.plugin = plugin  # Reference to the MagicWandPlugin instance
+		self.plugin = plugin
 		self.window = None
 		self.threshold_slider = None
 		self.color_picker = None
@@ -32,7 +31,6 @@ class MagicWandUI:
 		self.script_job_id = None
 
 	def open_gui(self):
-		"""Creates and displays the GUI."""
 		if cmds.window("MagicWandForVertexColors", exists=True):
 			cmds.deleteUI("MagicWandForVertexColors")
 
@@ -113,7 +111,6 @@ class MagicWandUI:
 		)
 
 	def update_current_color_display(self, color_rgb):
-		"""Updates the color display and text in the UI."""
 		if color_rgb is None:
 			color_rgb = DEFAULT_INACTIVE_COLOR
 
@@ -149,10 +146,9 @@ class MagicWandPlugin:
 		self.initial_face = None
 		self.stored_selected_faces = set()
 		self.previous_selection = set()
-		self.ui = MagicWandUI(self)  # Initialize UI with reference to this plugin
+		self.ui = MagicWandUI(self)
 
 	def display_message(self, message, level="info"):
-		"""Displays messages only if they are different from the last one."""
 		if message != self.last_message:
 			self.last_message = message
 			if level == "info":
@@ -163,14 +159,11 @@ class MagicWandPlugin:
 				om.MGlobal.displayError(message)
 
 	def selection_changed(self, *args):
-		"""Callback for selection changes."""
 		try:
 			current_selection = set(cmds.ls(selection=True, flatten=True))
 
 			if self.previous_selection == current_selection or current_selection == self.stored_selected_faces:
 				return
-
-			om.MGlobal.displayInfo("NEW SELECTION")
 
 			self.previous_selection = current_selection
 
@@ -231,7 +224,6 @@ class MagicWandPlugin:
 			return
 
 	def slider_changed(self, *args):
-		"""Callback for slider changes."""
 		if self.ui.threshold_slider and cmds.floatSliderGrp(
 			self.ui.threshold_slider, exists=True
 		):
@@ -243,7 +235,6 @@ class MagicWandPlugin:
 		)
 
 	def apply_fill_color(self, *args):
-		"""Applies the selected fill color to all selected vertices."""
 		selection = cmds.ls(selection=True, flatten=True)
 		if not selection:
 			self.display_message("Please select vertices to apply the color.", "info")
@@ -264,14 +255,12 @@ class MagicWandPlugin:
 			cmds.undoInfo(closeChunk=True)
 
 	def fill_color_changed(self, *args):
-		"""Updates fill color from UI."""
 		if self.ui.color_picker:
 			self.fill_color = cmds.colorSliderGrp(
 				self.ui.color_picker, query=True, rgbValue=True
 			)
 
 	def clear_vertex_colors(self, *args):
-		"""Removes vertex colors from selected faces."""
 		selection = cmds.ls(selection=True, flatten=True)
 		if not selection:
 			self.display_message("Please, select faces or vertices to clear vertex colors.", "info")
@@ -288,7 +277,6 @@ class MagicWandPlugin:
 	def select_similar_colored_faces(
 		self, threshold=DEFAULT_THRESHOLD, multi_select_mode=False
 	):
-		"""Selects faces with similar vertex colors."""
 		try:
 			selection = cmds.ls(selection=True, flatten=True)
 			if not selection or not self.target_color:
@@ -423,7 +411,6 @@ class MagicWandPlugin:
 		self.previous_selection.clear()
 
 
-# Global instance
 plugin_instance = MagicWandPlugin()
 
 
