@@ -162,7 +162,7 @@ class MagicWandPlugin:
 		try:
 			current_selection = set(cmds.ls(selection=True, flatten=True))
 
-			if self.previous_selection == current_selection or current_selection == self.stored_selected_faces:
+			if self.previous_selection == current_selection:
 				return
 
 			self.previous_selection = current_selection
