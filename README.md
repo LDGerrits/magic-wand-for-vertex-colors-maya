@@ -8,7 +8,7 @@ Welcome to **Magic Wand for Vertex Colors**, a powerful Autodesk Maya plugin des
 
 ### Option 1: Plug-in Manager (All Platforms)
 1. **Download**  
-   Grab the latest version from [GumRoad](https://lgerrits.gumroad.com/l/ztspt).
+   Grab the latest version from [GumRoad](https://lgerrits.gumroad.com/l/MagicWandForVertexColors).
 2. **Unzip**  
    Extract the ZIP file to a folder on your computer (e.g., use "Extract All" on Windows or double-click on macOS).
 3. **Open Maya**  
@@ -22,7 +22,7 @@ Welcome to **Magic Wand for Vertex Colors**, a powerful Autodesk Maya plugin des
 
 ### Option 2: MEL Installer (Windows Only)
 1. **Download**  
-   Get the ZIP file from [GumRoad](https://lgerrits.gumroad.com/l/ztspt).
+   Get the ZIP file from [GumRoad](https://lgerrits.gumroad.com/l/MagicWandForVertexColors).
 2. **Unzip**  
    Extract the ZIP file to a folder on your computer (e.g., use "Extract All" on Windows).
 3. **Run the Installer**  
