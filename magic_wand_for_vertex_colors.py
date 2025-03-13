@@ -96,7 +96,9 @@ class MagicWandUI:
 			label="Contiguous Selection",
 			value=True,
 			align="middle",
-			changeCommand=lambda x: self.plugin.selection_changed(),
+			changeCommand=lambda x: self.plugin.select_similar_colored_faces(
+				self.plugin.last_threshold_value, len(self.plugin.stored_selected_faces) > 0
+			),
 		)
 
 		cmds.separator(style="in")
@@ -167,6 +169,8 @@ class MagicWandPlugin:
 
 			if self.previous_selection == current_selection or current_selection == self.stored_selected_faces:
 				return
+
+			om.MGlobal.displayInfo("NEW SELECTION")
 
 			self.previous_selection = current_selection
 
