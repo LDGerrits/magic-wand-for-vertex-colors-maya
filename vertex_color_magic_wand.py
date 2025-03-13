@@ -205,8 +205,6 @@ class MagicWandPlugin:
 
 			self.previous_selection = current_selection
 
-			om.MGlobal.displayInfo("Selection Changed")
-
 			if not current_selection:
 				self.initial_face = None
 				self.target_color = None
@@ -220,15 +218,27 @@ class MagicWandPlugin:
 			if self.ui.threshold_slider and cmds.floatSliderGrp(self.ui.threshold_slider, exists=True):
 				self.last_threshold_value = cmds.floatSliderGrp(self.ui.threshold_slider, query=True, value=True)
 
-			threshold_distance = (self.last_threshold_value / 100.0) * MAX_RGB_DISTANCE
-   
-			# Check if new_faces are all within threshold of target_color
 			is_threshold_change = False
-			if self.target_color and new_faces:
-				is_threshold_change = all(
-					self.color_distance(self.get_face_color(face), self.target_color) <= threshold_distance
-					for face in new_faces if self.get_face_color(face) is not None
+			if self.initial_face is not None:
+				mesh = self.initial_face.split(".")[0]
+	
+				threshold_distance = (self.last_threshold_value / 100.0) * MAX_RGB_DISTANCE
+	
+				continuous = cmds.checkBox(
+					self.ui.continuous_checkbox, query=True, value=True
 				)
+
+				matching_faces = (
+					self.continuous_selection(
+						mesh, self.initial_face, self.target_color, threshold_distance
+					)
+					if continuous
+					else self.non_continuous_selection(
+						mesh, self.target_color, threshold_distance
+					)
+				)
+	
+				is_threshold_change = new_faces.issubset(matching_faces)
 
 			if new_faces:
 				selected_face = list(new_faces)[0]
@@ -445,6 +455,7 @@ class MagicWandPlugin:
 		self.target_color = None
 		self.initial_face = None
 		self.stored_selected_faces.clear()
+		self.previous_selection.clear()
 
 
 # Global instance
