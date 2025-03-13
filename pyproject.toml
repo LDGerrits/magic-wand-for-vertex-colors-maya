@@ -3,11 +3,11 @@ requires = ["setuptools", "setuptools-scm"]
 
 
 [tool.setuptools]
-py_modules = ["vertex_color_magic_wand"]
+py_modules = ["magic_wand_for_vertex_colors"]
 
 
 [project]
-name = "vertex_color_magic_wand"
+name = "magic_wand_for_vertex_colors"
 authors = [
     {name = "LDGerrits"},
 ]
