@@ -29,6 +29,9 @@ class MagicWandUI:
 		self.current_color_display = None
 		self.current_color_text = None
 		self.continuous_checkbox = None
+		self.script_job_id = None
+		self.undo_job_id = None
+		self.redo_job_id = None
 
 	def open_gui(self):
 		"""Creates and displays the GUI."""
@@ -103,9 +106,18 @@ class MagicWandUI:
 		cmds.button(label="Clear Vertex Data", command=self.plugin.clear_vertex_colors)
 
 		cmds.showWindow(self.window)
-		cmds.scriptJob(
-			event=["SelectionChanged", self.plugin.selection_changed],
-			parent=self.window,
+
+		self.script_job_id = cmds.scriptJob(
+			event=["SelectionChanged", lambda: self.plugin.selection_changed()],
+			parent=self.window
+		)
+		self.undo_job_id = cmds.scriptJob(
+			event=["Undo", lambda: self.plugin.start_undo_redo()],
+			parent=self.window
+		)
+		self.redo_job_id = cmds.scriptJob(
+			event=["Redo", lambda: self.plugin.start_undo_redo()],
+			parent=self.window
 		)
 
 	def update_current_color_display(self, color_rgb):
@@ -130,6 +142,11 @@ class MagicWandUI:
 				f"HSV: {hsv_rounded}",
 			)
 
+	def cleanup(self):
+		for job_id in [self.script_job_id, self.undo_job_id, self.redo_job_id]:
+			if job_id is not None and cmds.scriptJob(exists=job_id):
+				cmds.scriptJob(kill=job_id)
+		self.is_processing_undo = False
 
 class MagicWandPlugin:
 	def __init__(self):
@@ -140,7 +157,29 @@ class MagicWandPlugin:
 		self.target_color = None
 		self.initial_face = None
 		self.stored_selected_faces = set()
+		self.is_processing_undo = False
+		self.previous_selection = set()
 		self.ui = MagicWandUI(self)  # Initialize UI with reference to this plugin
+
+	def set_undo_state(self, state):
+		self.is_processing_undo = state
+
+	def start_undo_redo(self):
+		"""Called when Undo or Redo starts."""
+		self.is_processing_undo = True
+		if self.ui.script_job_id and cmds.scriptJob(exists=self.ui.script_job_id):
+			cmds.scriptJob(kill=self.ui.script_job_id)  # Temporarily disable selection job
+		cmds.evalDeferred(lambda: self.end_undo_redo(), lowestPriority=True)
+
+	def end_undo_redo(self):
+		"""Reset the undo state after the operation completes."""
+		# Re-create the selection changed script job
+		if not self.ui.script_job_id or not cmds.scriptJob(exists=self.ui.script_job_id):
+			self.ui.script_job_id = cmds.scriptJob(
+				event=["SelectionChanged", lambda: self.selection_changed()],
+				parent=self.ui.window
+			)
+		self.is_processing_undo = False
 
 	def display_message(self, message, level="info"):
 		"""Displays messages only if they are different from the last one."""
@@ -156,7 +195,17 @@ class MagicWandPlugin:
 	def selection_changed(self, *args):
 		"""Callback for selection changes."""
 		try:
-			current_selection = cmds.ls(selection=True, flatten=True)
+			if self.is_processing_undo:
+				return
+		
+			current_selection = set(cmds.ls(selection=True, flatten=True))
+
+			if self.previous_selection == current_selection or current_selection == self.stored_selected_faces:
+				return
+
+			self.previous_selection = current_selection
+
+			om.MGlobal.displayInfo("Selection Changed")
 
 			if not current_selection:
 				self.initial_face = None
@@ -165,7 +214,7 @@ class MagicWandPlugin:
 				self.ui.update_current_color_display(None)
 				return
 
-			new_faces = set(current_selection) - self.stored_selected_faces
+			new_faces = current_selection - self.stored_selected_faces
 			multi_select_mode = cmds.getModifiers() & 1
    
 			if self.ui.threshold_slider and cmds.floatSliderGrp(self.ui.threshold_slider, exists=True):
@@ -220,7 +269,10 @@ class MagicWandPlugin:
 		if not selection:
 			self.display_message("Please select vertices to apply the color.", "info")
 			return
+
+		cmds.undoInfo(openChunk=True)
 		try:
+			self.is_processing_undo = True  # Prevent selection_changed during undo
 			for vertex in selection:
 				cmds.polyColorPerVertex(
 					vertex, colorRGB=self.fill_color, colorDisplayOption=True
@@ -230,6 +282,9 @@ class MagicWandPlugin:
 				self.ui.update_current_color_display(self.target_color)
 		except Exception as e:
 			self.display_message(f"Error applying vertex colors: {e}", "error")
+		finally:
+			self.is_processing_undo = False
+			cmds.undoInfo(closeChunk=True)
 
 	def fill_color_changed(self, *args):
 		"""Updates fill color from UI."""
@@ -242,15 +297,18 @@ class MagicWandPlugin:
 		"""Removes vertex colors from selected faces."""
 		selection = cmds.ls(selection=True, flatten=True)
 		if not selection:
-			self.display_message(
-				"Please, select faces or vertices to clear vertex colors.", "info"
-			)
+			self.display_message("Please, select faces or vertices to clear vertex colors.", "info")
 			return
-		for face in selection:
-			try:
+		cmds.undoInfo(openChunk=True)
+		try:
+			self.is_processing_undo = True
+			for face in selection:
 				cmds.polyColorPerVertex(face, remove=True)
-			except Exception as e:
-				continue
+		except Exception as e:
+			self.display_message(f"Error clearing vertex colors: {e}", "error")
+		finally:
+			self.is_processing_undo = False
+			cmds.undoInfo(closeChunk=True)
 
 	def select_similar_colored_faces(
 		self, threshold=DEFAULT_THRESHOLD, multi_select_mode=False
@@ -377,6 +435,7 @@ class MagicWandPlugin:
 		)
 
 	def unload_menu(self):
+		self.ui.cleanup()
 		if cmds.menu(f"{MENU_PARENT}|{MENU_NAME}", exists=True):
 			menu_long_name = f"{MENU_PARENT}|{MENU_NAME}"
 			if cmds.menuItem(self.menu_entry_name, exists=True):
