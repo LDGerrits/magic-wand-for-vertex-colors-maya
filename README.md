@@ -1,8 +1,6 @@
 # Magic Wand for Vertex Colors
 
-Welcome to **Magic Wand for Vertex Colors**, a powerful Autodesk Maya plugin designed to make painting vertex colors fast, intuitive, and fun! Created by L. Gerrits, this tool brings a magic touch to your 3D workflow.
-
----
+An Autodesk Maya plugin for fast and untuitive vertex color painting.
 
 ## Installation
 
@@ -15,10 +13,10 @@ Welcome to **Magic Wand for Vertex Colors**, a powerful Autodesk Maya plugin des
    Launch Maya and navigate to *Windows > Settings/Preferences > Plug-in Manager*.
 4. **Browse**  
    In the Plug-in Manager, click *Browse*, then locate the extracted plugin folder.
-5. **Load It**  
+5. **Load**  
    Double-click `magic_wand_for_vertex_colors.py` to load. Check *Auto Load* to enable it on startup.
-6. **Enjoy**  
-   Find it in the *Tools* menu and start painting vertex colors like a pro!
+6. **Paint**  
+   Find it in the *Tools* menu and start painting vertex colors!
 
 ### Option 2: MEL Installer (Windows Only)
 1. **Download**  
@@ -27,14 +25,14 @@ Welcome to **Magic Wand for Vertex Colors**, a powerful Autodesk Maya plugin des
    Extract the ZIP file to a folder on your computer (e.g., use "Extract All" on Windows).
 3. **Run the Installer**  
    Drag and drop `installer.mel` into the Maya workspace.
-4. **Enjoy**  
-   Access it via the *Tools* menu and dive in!  
+4. **Paint**  
+   Access it via the *Tools* menu!  
    *Note*: Windows-only. Requires `.mel` and icon files from the download. Adds a custom icon automatically.
 
 ---
 
 ## Requirements
-- Autodesk Maya (compatible with versions 2017-2025).
+- Autodesk Maya (compatible with versions 2017-2026).
 - Windows, macOS, or Linux for Option 1; Windows only for Option 2.
 
 ---
