@@ -34,8 +34,3 @@ An Autodesk Maya plugin for fast and untuitive vertex color painting.
 ## Requirements
 - Autodesk Maya (compatible with versions 2017-2026).
 - Windows, macOS, or Linux for Option 1; Windows only for Option 2.
-
----
-
-## Support
-Questions? Issues? Contact me at [l.d.gerrits@outlook.com](mailto:l.d.gerrits@outlook.com).
