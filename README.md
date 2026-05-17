@@ -1,6 +1,6 @@
 # Magic Wand for Vertex Colors
 
-An Autodesk Maya plugin for fast and untuitive vertex color painting.
+An Autodesk Maya plugin for fast and intuitive vertex color painting.
 
 ## Installation
 
